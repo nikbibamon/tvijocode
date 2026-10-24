@@ -1,7 +1,13 @@
 name: Publish - Stable - Windows
 
-# Tvijo Code: VSCodium's stable Windows pipeline, trimmed to x64, no code
-# signing (no certificate yet), no versions repo, no winget. Manual dispatch only.
+# Tvijo Code test phase: Windows x64 only, one job, manual dispatch.
+#
+# VSCodium splits compile and packaging into two jobs so several architectures
+# can share one compile; with x64 only that split ran `npm ci` twice (~10 min
+# each). Here the whole build runs once in VSCodium's own single-pass mode
+# (CI_BUILD=no in build.sh). Not built in this phase: MSI (VSCodium's WiX
+# carries VSCodium's UpgradeCode), REH, the system-wide installer and the
+# tunnel CLI (build_cli.sh points its self-update at VSCodium's releases).
 
 on:
   workflow_dispatch: {}
@@ -10,169 +16,80 @@ env:
   APP_NAME: TvijoCode
   ASSETS_REPOSITORY: ${{ github.repository }}
   BINARY_NAME: tvijocode
+  DISABLE_MSI: "yes"
   DISABLE_UPDATE: "yes"
   GH_REPO_PATH: ${{ github.repository }}
   GITHUB_BRANCH: main
   ORG_NAME: Tvijo
   OS_NAME: windows
+  SHOULD_BUILD_CLI: "no"
+  SHOULD_BUILD_EXE_SYS: "no"
+  SHOULD_BUILD_REH: "no"
+  SHOULD_BUILD_REH_WEB: "no"
   # check_tags.sh compares against the latest release and aborts when it is not
   # a VS Code version (ours can be ext-*). "no" = always build, skip asset dedup.
   SHOULD_DEPLOY: "no"
+  VSCODE_ARCH: x64
   VSCODE_QUALITY: stable
+  # Releases kept on the Releases page; older VS Code-version releases are deleted.
+  KEEP_RELEASES: 3
 
 jobs:
-  check:
-    runs-on: ubuntu-latest
-    permissions: {}
-    outputs:
-      MS_COMMIT: ${{ env.MS_COMMIT }}
-      MS_TAG: ${{ env.MS_TAG }}
-      RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-      SHOULD_BUILD: ${{ env.SHOULD_BUILD }}
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.GITHUB_BRANCH }}
-          persist-credentials: false
-
-      - name: Clone VSCode repo
-        run: ./get_repo.sh
-
-      - name: Check existing tags/releases
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          CHECK_ALL: yes
-        run: ./check_tags.sh
-
-  compile:
-    needs:
-      - check
+  build:
     runs-on: windows-2022
-    permissions: {}
+    permissions:
+      contents: write
     defaults:
       run:
         shell: bash
-    env:
-      MS_COMMIT: ${{ needs.check.outputs.MS_COMMIT }}
-      MS_TAG: ${{ needs.check.outputs.MS_TAG }}
-      RELEASE_VERSION: ${{ needs.check.outputs.RELEASE_VERSION }}
-      SHOULD_BUILD: ${{ needs.check.outputs.SHOULD_BUILD }}
-      VSCODE_ARCH: x64
-    outputs:
-      BUILD_SOURCEVERSION: ${{ env.BUILD_SOURCEVERSION }}
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ env.GITHUB_BRANCH }}
           persist-credentials: false
-        if: env.SHOULD_BUILD == 'yes'
 
       - name: Setup Node.js environment
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
         with:
           node-version-file: .nvmrc
-        if: env.SHOULD_BUILD == 'yes'
 
       - name: Setup Python 3
         uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
         with:
           python-version: "3.11"
-        if: env.SHOULD_BUILD == 'yes'
 
       - name: Clone VSCode repo
         run: ./get_repo.sh
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Build
-        env:
-          SHOULD_BUILD_REH: no
-          SHOULD_BUILD_REH_WEB: no
-        run: ./build.sh
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Compress vscode artifact
-        run: |
-          find vscode -type f -not -path "*/node_modules/*" -not -path "vscode/.build/node/*" -not -path "vscode/.git/*" > vscode.txt
-          echo "vscode/.build/extensions/node_modules" >> vscode.txt
-          echo "vscode/.git" >> vscode.txt
-          tar -czf vscode.tar.gz -T vscode.txt
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Upload vscode artifact
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
-        with:
-          name: vscode
-          path: ./vscode.tar.gz
-          retention-days: 7
-        if: env.SHOULD_BUILD == 'yes'
-
-  build:
-    needs:
-      - check
-      - compile
-    runs-on: windows-2022
-    permissions:
-      contents: write
-    strategy:
-      fail-fast: false
-      matrix:
-        vscode_arch:
-          - x64
-    defaults:
-      run:
-        shell: bash
-    env:
-      BUILD_SOURCEVERSION: ${{ needs.compile.outputs.BUILD_SOURCEVERSION }}
-      MS_COMMIT: ${{ needs.check.outputs.MS_COMMIT }}
-      MS_TAG: ${{ needs.check.outputs.MS_TAG }}
-      RELEASE_VERSION: ${{ needs.check.outputs.RELEASE_VERSION }}
-      SHOULD_BUILD: ${{ needs.check.outputs.SHOULD_BUILD }}
-      VSCODE_ARCH: ${{ matrix.vscode_arch }}
-    outputs:
-      RELEASE_VERSION: ${{ env.RELEASE_VERSION }}
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.GITHUB_BRANCH }}
-          persist-credentials: false
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Setup Node.js environment
-        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version-file: '.nvmrc'
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Setup Python 3
-        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
-        with:
-          python-version: '3.11'
-        if: env.SHOULD_BUILD == 'yes'
 
       - name: Check existing tags/releases
         env:
-          # VSCodium's MSI hardcodes its own UpgradeCode: our MSI would upgrade
-          # (replace) a user's VSCodium. Off until build/windows/msi is rebranded.
-          DISABLE_MSI: "yes"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./check_tags.sh
-        if: env.SHOULD_BUILD == 'yes'
 
-      - name: Download vscode artifact
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
+      - name: Locate download caches
+        id: caches
+        run: |
+          echo "npm=$( npm config get cache )" >> "${GITHUB_OUTPUT}"
+          echo "electron=${LOCALAPPDATA}\\electron\\Cache" >> "${GITHUB_OUTPUT}"
+
+      # Keyed on the pinned VS Code commit and our patches: the same inputs
+      # resolve the same lockfiles, so npm and Electron come from the cache.
+      - name: Cache npm and Electron downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
         with:
-          name: vscode
-        if: env.SHOULD_BUILD == 'yes'
+          path: |
+            ${{ steps.caches.outputs.npm }}
+            ${{ steps.caches.outputs.electron }}
+          key: tvijocode-win-x64-${{ hashFiles('upstream/stable.json', 'patches/**') }}
+          restore-keys: |
+            tvijocode-win-x64-
 
       - name: Build
         env:
+          CI_BUILD: "no"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          npm_config_arch: ${{ matrix.vscode_arch }}
-          npm_config_target_arch: ${{ matrix.vscode_arch }}
-        run: ./build/windows/package.sh
+        run: ./build.sh
         if: env.SHOULD_BUILD == 'yes'
 
       - name: Embed Tvijo extensions
@@ -190,12 +107,11 @@ jobs:
       - name: Upload installers
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: tvijocode-${{ matrix.vscode_arch }}
+          name: tvijocode-${{ env.VSCODE_ARCH }}
           path: |
             assets/*.exe
-            assets/*.msi
             assets/*.zip
-          retention-days: 7
+          retention-days: 3
         if: env.SHOULD_BUILD == 'yes'
 
       - name: Prepare checksums
@@ -206,4 +122,10 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./release.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Delete old releases
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./tvijo/prune_releases.sh "${KEEP_RELEASES}"
         if: env.SHOULD_BUILD == 'yes'

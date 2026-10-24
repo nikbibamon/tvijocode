@@ -17,12 +17,14 @@ This repository also hosts the **Tvijo DSHREM MCP server** in [`mcp/`](mcp/)
 
 ## Download
 
-Pre-release builds are on [Releases](https://github.com/nikbibamon/tvijocode/releases).
-Builds are **not code-signed yet**:
+Test builds are on [Releases](https://github.com/nikbibamon/tvijocode/releases).
+During the test phase only **Windows 10/11 x64** is built
+(`TvijoCodeUserSetup-x64-*.exe` installs without admin rights; the `.zip` is portable).
+macOS and Linux builds follow after a series of passing Windows tests; their
+workflows are kept in `.github/workflows/` but disabled.
 
-- Windows: SmartScreen shows "unknown publisher" on first run (More info → Run anyway).
-- macOS: the app is ad-hoc signed, not notarized. Right-click → Open on first launch,
-  or run `xattr -dr com.apple.quarantine "/Applications/Tvijo Code.app"`.
+Builds are **not code-signed yet**: SmartScreen shows "unknown publisher" on first
+run (More info → Run anyway).
 
 ## When it does NOT work
 
