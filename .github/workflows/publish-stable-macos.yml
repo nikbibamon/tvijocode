@@ -1,27 +1,29 @@
 name: Publish - Stable - macOS
 
+# Tvijo Code: VSCodium's stable macOS pipeline without Apple notarization
+# (no developer certificate yet) and without the versions repo. The app is
+# ad-hoc signed so Apple Silicon runs it; Gatekeeper still warns on first open.
+
 on:
   workflow_dispatch: {}
-  repository_dispatch:
-    types:
-      - publish-stable
 
 env:
-  APP_NAME: VSCodium
+  APP_NAME: TvijoCode
   ASSETS_REPOSITORY: ${{ github.repository }}
-  BINARY_NAME: codium
+  BINARY_NAME: tvijocode
+  DISABLE_UPDATE: "yes"
   GH_REPO_PATH: ${{ github.repository }}
-  GITHUB_BRANCH: master
+  GITHUB_BRANCH: main
   MAX_OLD_SPACE_SIZE: 12288
-  ORG_NAME: ${{ github.repository_owner }}
+  ORG_NAME: Tvijo
   OS_NAME: osx
-  VERSIONS_REPOSITORY: ${{ github.repository_owner }}/versions
+  # See publish-stable-windows.yml: always build, skip release asset dedup.
+  SHOULD_DEPLOY: "no"
   VSCODE_QUALITY: stable
 
 jobs:
   build:
     runs-on: ${{ matrix.runner }}
-    environment: publish-osx
     permissions:
       contents: write
     env:
@@ -55,7 +57,7 @@ jobs:
       - name: Clone VSCode repo
         run: . get_repo.sh
 
-      - name: Check existing VSCodium tags/releases
+      - name: Check existing tags/releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: . check_tags.sh
@@ -66,13 +68,17 @@ jobs:
         run: ./build.sh
         if: env.SHOULD_BUILD == 'yes'
 
+      - name: Embed Tvijo extensions
+        run: |
+          brew list jq >/dev/null 2>&1 || brew install jq
+          ./tvijo/embed_extensions.sh "VSCode-darwin-${VSCODE_ARCH}"
+          # Changing the bundle breaks Electron's signature; arm64 refuses to
+          # launch an unsigned binary, an ad-hoc signature is enough to run.
+          codesign --force --deep --sign - "VSCode-darwin-${VSCODE_ARCH}/Tvijo Code.app"
+          codesign --verify --deep "VSCode-darwin-${VSCODE_ARCH}/Tvijo Code.app"
+        if: env.SHOULD_BUILD == 'yes'
+
       - name: Prepare assets
-        env:
-          CERTIFICATE_OSX_APP_PASSWORD: ${{ secrets.CERTIFICATE_OSX_APP_PASSWORD }}
-          CERTIFICATE_OSX_APPLE_ID: ${{ secrets.CERTIFICATE_OSX_APPLE_ID }}
-          CERTIFICATE_OSX_P12_DATA: ${{ secrets.CERTIFICATE_OSX_P12_DATA }}
-          CERTIFICATE_OSX_P12_PASSWORD: ${{ secrets.CERTIFICATE_OSX_P12_PASSWORD }}
-          CERTIFICATE_OSX_TEAM_ID: ${{ secrets.CERTIFICATE_OSX_TEAM_ID }}
         run: ./prepare_assets.sh
         if: env.SHOULD_BUILD == 'yes'
 
@@ -81,20 +87,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./release.sh
         if: env.SHOULD_BUILD == 'yes'
-
-      - name: Update versions repo
-        env:
-          GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
-          GITHUB_USERNAME: ${{ github.repository_owner }}
-        run: ./update_version.sh
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Clean up keychain
-        if: always()
-        run: |
-          KEYCHAIN=$RUNNER_TEMP/build.keychain
-
-          if [ -f "$KEYCHAIN" ];
-          then
-            security delete-keychain $KEYCHAIN
-          fi

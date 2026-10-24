@@ -1,20 +1,23 @@
 name: Publish - Stable - Windows
 
+# Tvijo Code: VSCodium's stable Windows pipeline, trimmed to x64, no code
+# signing (no certificate yet), no versions repo, no winget. Manual dispatch only.
+
 on:
   workflow_dispatch: {}
-  repository_dispatch:
-    types:
-      - publish-stable
 
 env:
-  APP_NAME: VSCodium
+  APP_NAME: TvijoCode
   ASSETS_REPOSITORY: ${{ github.repository }}
-  BINARY_NAME: codium
+  BINARY_NAME: tvijocode
+  DISABLE_UPDATE: "yes"
   GH_REPO_PATH: ${{ github.repository }}
-  GITHUB_BRANCH: master
-  ORG_NAME: ${{ github.repository_owner }}
+  GITHUB_BRANCH: main
+  ORG_NAME: Tvijo
   OS_NAME: windows
-  VERSIONS_REPOSITORY: ${{ github.repository_owner }}/versions
+  # check_tags.sh compares against the latest release and aborts when it is not
+  # a VS Code version (ours can be ext-*). "no" = always build, skip asset dedup.
+  SHOULD_DEPLOY: "no"
   VSCODE_QUALITY: stable
 
 jobs:
@@ -36,7 +39,7 @@ jobs:
       - name: Clone VSCode repo
         run: ./get_repo.sh
 
-      - name: Check existing VSCodium tags/releases
+      - name: Check existing tags/releases
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           CHECK_ALL: yes
@@ -102,7 +105,7 @@ jobs:
         with:
           name: vscode
           path: ./vscode.tar.gz
-          retention-days: 30
+          retention-days: 7
         if: env.SHOULD_BUILD == 'yes'
 
   build:
@@ -110,7 +113,6 @@ jobs:
       - check
       - compile
     runs-on: windows-2022
-    environment: publish-windows
     permissions:
       contents: write
     strategy:
@@ -118,7 +120,6 @@ jobs:
       matrix:
         vscode_arch:
           - x64
-          - arm64
     defaults:
       run:
         shell: bash
@@ -151,9 +152,11 @@ jobs:
           python-version: '3.11'
         if: env.SHOULD_BUILD == 'yes'
 
-      - name: Check existing VSCodium tags/releases
+      - name: Check existing tags/releases
         env:
-          DISABLE_MSI: ${{ vars.DISABLE_STABLE_MSI }}
+          # VSCodium's MSI hardcodes its own UpgradeCode: our MSI would upgrade
+          # (replace) a user's VSCodium. Off until build/windows/msi is rebranded.
+          DISABLE_MSI: "yes"
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./check_tags.sh
         if: env.SHOULD_BUILD == 'yes'
@@ -172,34 +175,27 @@ jobs:
         run: ./build/windows/package.sh
         if: env.SHOULD_BUILD == 'yes'
 
+      - name: Embed Tvijo extensions
+        run: ./tvijo/embed_extensions.sh "VSCode-win32-${VSCODE_ARCH}"
+        if: env.SHOULD_BUILD == 'yes'
+
       - name: Prepare assets
         run: ./prepare_assets.sh
         if: env.SHOULD_BUILD == 'yes'
 
-      - name: Upload unsigned artifacts
-        id: upload-unsigned-artifacts
+      - name: Smoke test portable zip
+        run: ./tvijo/smoke_windows.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Upload installers
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
-          name: unsigned-${{ matrix.vscode_arch }}
+          name: tvijocode-${{ matrix.vscode_arch }}
           path: |
             assets/*.exe
             assets/*.msi
-          retention-days: 1
-        if: env.SHOULD_BUILD == 'yes'
-
-      - name: Signing
-        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2
-        with:
-          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
-          organization-id: ${{ secrets.SIGNPATH_ORGANIZATION_ID }}
-          project-slug: ${{ secrets.SIGNPATH_PROJECT_SLUG }}
-          signing-policy-slug: ${{ secrets.SIGNPATH_POLICY_SLUG }}
-          github-artifact-id: ${{ steps.upload-unsigned-artifacts.outputs.artifact-id }}
-          artifact-configuration-slug: ${{ matrix.vscode_arch }}
-          wait-for-completion: true
-          # 8h to manually approve the request
-          wait-for-completion-timeout-in-seconds: 28800
-          output-artifact-directory: assets/
+            assets/*.zip
+          retention-days: 7
         if: env.SHOULD_BUILD == 'yes'
 
       - name: Prepare checksums
@@ -211,43 +207,3 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: ./release.sh
         if: env.SHOULD_BUILD == 'yes'
-
-      - name: Update versions repo
-        env:
-          GITHUB_TOKEN: ${{ secrets.STRONGER_GITHUB_TOKEN }}
-          GITHUB_USERNAME: ${{ github.repository_owner }}
-        run: ./update_version.sh
-        if: env.SHOULD_BUILD == 'yes'
-
-  winget:
-    needs: build
-    runs-on: windows-2022
-    environment: publish
-    permissions:
-      contents: write
-    defaults:
-      run:
-        shell: bash
-    env:
-      APP_IDENTIFIER: VSCodium.VSCodium
-
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ env.GITHUB_BRANCH }}
-          persist-credentials: false
-
-      - name: Check version
-        run: ./stores/winget/check_version.sh
-        env:
-          RELEASE_VERSION: ${{ needs.build.outputs.RELEASE_VERSION }}
-
-      - name: Release to WinGet
-        uses: vedantmgoyal9/winget-releaser@b7370d4d152efdce803a26cc6ca9eee58cb2ad54 # v2
-        with:
-          identifier: ${{ env.APP_IDENTIFIER }}
-          version: ${{ env.RELEASE_VERSION }}
-          release-tag: ${{ env.RELEASE_VERSION }}
-          installers-regex: '\.exe$' # only .exe files
-          token: ${{ secrets.STRONGER_GITHUB_TOKEN }}
-        if: env.SHOULD_DEPLOY == 'yes'

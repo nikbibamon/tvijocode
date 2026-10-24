@@ -288,4 +288,7 @@ elif [[ "${OS_NAME}" == "windows" ]]; then
   sed -i 's|Microsoft Corporation|VSCodium|' build/win32/code.iss
 fi
 
+# tvijo: the single hook into upstream scripts, keep it when merging VSCodium.
+. ../tvijo/brand.sh
+
 cd ..
