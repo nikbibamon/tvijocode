@@ -1,0 +1,16 @@
+{
+  "name": "tvijo-dshrem-mcp",
+  "version": "0.1.0",
+  "description": "Tvijo DSHREM tools over MCP stdio",
+  "mcpName": "com.tvijo/dshrem",
+  "type": "module",
+  "bin": { "tvijo-dshrem-mcp": "bin/tvijo-dshrem-mcp.js" },
+  "files": ["bin", "src", "README.md", "LICENSE", "server.json"],
+  "engines": { "node": ">=20" },
+  "license": "MIT",
+  "repository": { "type": "git", "url": "git+https://github.com/nikbibamon/tvijocode.git", "directory": "mcp" },
+  "homepage": "https://dsh.tvijo.com",
+  "scripts": { "test": "node --test" },
+  "dependencies": { "@modelcontextprotocol/sdk": "1.32.2", "zod": "4.6.7" },
+  "devDependencies": { "ajv": "8.20.0", "ajv-formats": "3.0.1" }
+}
