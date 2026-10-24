@@ -5,19 +5,41 @@
   "description": "Ask Tvijo DSHREM with explicit spending limits and manage your account and tasks.",
   "version": "0.1.0",
   "websiteUrl": "https://dsh.tvijo.com",
+  "icons": [
+    {
+      "src": "https://raw.githubusercontent.com/nikbibamon/tvijocode/main/tvijo/logo-128.png",
+      "mimeType": "image/png",
+      "sizes": [
+        "128x128"
+      ]
+    }
+  ],
   "repository": {
     "url": "https://github.com/nikbibamon/tvijocode",
     "source": "github",
     "subfolder": "mcp"
   },
-  "packages": [{
-    "registryType": "npm",
-    "identifier": "tvijo-dshrem-mcp",
-    "version": "0.1.0",
-    "transport": { "type": "stdio" },
-    "environmentVariables": [
-      { "name": "TVIJO_TOKEN", "description": "Optional Tvijo access token; otherwise use device sign-in.", "isSecret": true, "isRequired": false },
-      { "name": "TVIJO_MAX_USD_CAP", "description": "Per-request spending cap in USD (default 1, hard ceiling 5).", "isRequired": false }
-    ]
-  }]
+  "packages": [
+    {
+      "registryType": "npm",
+      "identifier": "tvijo-dshrem-mcp",
+      "version": "0.1.0",
+      "transport": {
+        "type": "stdio"
+      },
+      "environmentVariables": [
+        {
+          "name": "TVIJO_TOKEN",
+          "description": "Optional Tvijo access token; otherwise use device sign-in.",
+          "isSecret": true,
+          "isRequired": false
+        },
+        {
+          "name": "TVIJO_MAX_USD_CAP",
+          "description": "Per-request spending cap in USD (default 1, hard ceiling 5).",
+          "isRequired": false
+        }
+      ]
+    }
+  ]
 }

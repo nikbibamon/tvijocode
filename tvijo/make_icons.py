@@ -1,48 +1,47 @@
 #!/usr/bin/env python3
-"""Generate every Tvijo Code brand image from one glyph.
+"""Generate every Tvijo Code brand image from the Tvijo logo.
 
 Why a script and not hand-made files: the VSCodium tree ships its own logo in
-~70 places; regenerating from one source keeps the brand consistent after each
+~30 places; regenerating from one source keeps the brand consistent after each
 upstream rebase. Pillow only, so it runs anywhere without ImageMagick/rsvg.
+
+Source: tvijo/logo-128.png (gold emblem on navy). A larger source can replace
+it under the same name; 128 px upscaled to the 1024 px macOS icon is soft.
 
 Usage: python3 tvijo/make_icons.py   (writes into tvijo/src/stable/)
 """
 from __future__ import annotations
 
+import base64
+import io
 from pathlib import Path
 
-from PIL import Image, ImageDraw
+from PIL import Image, ImageChops, ImageDraw
 
 ROOT = Path(__file__).resolve().parent
 OUT = ROOT / "src" / "stable"
-
-BG = (40, 104, 216, 255)        # --accent light theme of the extension (#2868d8)
-SURFACE = (17, 21, 28)          # --surface dark theme (#11151c)
-FG = (255, 255, 255, 255)
-
-# The glyph from the extension's media/tvijo.svg (viewBox 24x24):
-# M3 5h18v2H3z  m7 3h4v11h-4z  m-4 3h12v2H6z
-GLYPH = [(3, 5, 21, 7), (10, 8, 14, 19), (6, 11, 18, 13)]
-GLYPH_SVG = '<path d="M3 5h18v2H3zm7 3h4v11h-4zm-4 3h12v2H6z"/>'
-
-
-def glyph(draw: ImageDraw.ImageDraw, x0: float, y0: float, size: float, fill) -> None:
-    k = size / 24.0
-    for a, b, c, d in GLYPH:
-        draw.rectangle([x0 + a * k, y0 + b * k, x0 + c * k - 1, y0 + d * k - 1], fill=fill)
+LOGO = Image.open(ROOT / "logo-128.png").convert("RGBA")
+SURFACE = (6, 14, 27)  # the logo's own background, so installer art blends in
 
 
 def app_icon(size: int, margin: float = 0.0) -> Image.Image:
-    """Rounded tile with the glyph; margin leaves room the macOS grid expects."""
-    scale = 4  # draw big, downsample: cheap antialiasing
-    s = size * scale
-    im = Image.new("RGBA", (s, s), (0, 0, 0, 0))
-    d = ImageDraw.Draw(im)
-    m = int(s * margin)
-    d.rounded_rectangle([m, m, s - m - 1, s - m - 1], radius=int((s - 2 * m) * 0.22), fill=BG)
-    inner = s - 2 * m
-    glyph(d, m + inner * 0.12, m + inner * 0.10, inner * 0.76, FG)
-    return im.resize((size, size), Image.LANCZOS)
+    """Logo on a rounded tile; margin leaves room the macOS icon grid expects."""
+    scale = 4  # mask drawn big, then downsampled: cheap antialiasing
+    inner = size - 2 * int(size * margin)
+    logo = LOGO.resize((inner, inner), Image.LANCZOS)
+    mask = Image.new("L", (inner * scale, inner * scale), 0)
+    ImageDraw.Draw(mask).rounded_rectangle([0, 0, inner * scale - 1, inner * scale - 1], radius=int(inner * scale * 0.22), fill=255)
+    logo.putalpha(mask.resize((inner, inner), Image.LANCZOS))
+    im = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    im.paste(logo, ((size - inner) // 2, (size - inner) // 2), logo)
+    return im
+
+
+def emblem_mask(size: int) -> Image.Image:
+    """Alpha of the gold emblem alone: luminance above the navy background."""
+    grey = LOGO.convert("L").resize((size, size), Image.LANCZOS)
+    background = grey.getpixel((0, 0))
+    return grey.point(lambda v: 0 if v <= background + 25 else min(255, (v - background - 25) * 3))
 
 
 def installer_big(w: int, h: int) -> Image.Image:
@@ -60,24 +59,29 @@ def installer_small(w: int, h: int) -> Image.Image:
     return im
 
 
-def svg_tile() -> str:
+def png_data_uri(im: Image.Image) -> str:
+    buf = io.BytesIO()
+    im.save(buf, format="PNG", optimize=True)
+    return "data:image/png;base64," + base64.b64encode(buf.getvalue()).decode("ascii")
+
+
+def svg_image(im: Image.Image, width: int, height: int) -> str:
+    """SVG wrapper around a raster: the workbench and Linux menus ask for .svg."""
     return (
         '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 24 24">\n'
-        '  <rect width="24" height="24" rx="5.3" fill="#2868d8"/>\n'
-        '  <g fill="#fff" transform="translate(2.88 2.4) scale(0.76)">' + GLYPH_SVG + "</g>\n"
+        f'<svg xmlns="http://www.w3.org/2000/svg" width="{width}" height="{height}" viewBox="0 0 {im.width} {im.height}">\n'
+        f'  <image width="{im.width}" height="{im.height}" href="{png_data_uri(im)}"/>\n'
         "</svg>\n"
     )
 
 
-def svg_letterpress(fill: str, opacity: str | None) -> str:
-    op = f' fill-opacity="{opacity}"' if opacity else ""
-    return (
-        '<?xml version="1.0" encoding="UTF-8"?>\n'
-        '<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 24 24">\n'
-        f'  <g fill="{fill}"{op}>' + GLYPH_SVG + "</g>\n"
-        "</svg>\n"
-    )
+def letterpress(colour: tuple[int, int, int], opacity: float) -> Image.Image:
+    mask = emblem_mask(256)
+    if opacity < 1:
+        mask = ImageChops.multiply(mask, Image.new("L", mask.size, int(255 * opacity)))
+    im = Image.new("RGBA", mask.size, colour + (0,))
+    im.putalpha(mask)
+    return im
 
 
 def xpm(im: Image.Image) -> str:
@@ -102,8 +106,8 @@ INNO_BIG = {100: (164, 314), 125: (192, 386), 150: (246, 459), 175: (273, 556),
             200: (328, 604), 225: (355, 700), 250: (410, 797)}
 INNO_SMALL = {100: (55, 55), 125: (64, 68), 150: (83, 80), 175: (92, 97),
               200: (110, 106), 225: (119, 123), 250: (138, 140)}
-LETTERPRESS = {"dark": ("#B2B2B2", "0.3"), "light": ("#B2B2B2", "0.1"),
-               "hcDark": ("#3C3C3C", None), "hcLight": ("#B2B2B2", None)}
+LETTERPRESS = {"dark": ((178, 178, 178), 0.3), "light": ((178, 178, 178), 0.1),
+               "hcDark": ((60, 60, 60), 1.0), "hcLight": ((178, 178, 178), 1.0)}
 
 
 def main() -> None:
@@ -128,16 +132,16 @@ def main() -> None:
     app_icon(1024, margin=0.1).save(mac / "code.icns")
 
     app_icon(512).save(lin / "code.png")
-    (lin / "code.svg").write_text(svg_tile())
+    (lin / "code.svg").write_text(svg_image(app_icon(256), 1024, 1024))
     (lin / "rpm" / "code.xpm").write_text(xpm(app_icon(64)))
 
     app_icon(192).save(srv / "code-192.png")
     app_icon(512).save(srv / "code-512.png")
     big.save(srv / "favicon.ico", sizes=[(16, 16), (32, 32), (48, 48)])
 
-    (media / "code-icon.svg").write_text(svg_tile())
-    for theme, (fill, op) in LETTERPRESS.items():
-        (editor / f"letterpress-{theme}.svg").write_text(svg_letterpress(fill, op))
+    (media / "code-icon.svg").write_text(svg_image(app_icon(256), 1024, 1024))
+    for theme, (colour, opacity) in LETTERPRESS.items():
+        (editor / f"letterpress-{theme}.svg").write_text(svg_image(letterpress(colour, opacity), 40, 40))
 
     print("written:", sum(1 for _ in OUT.rglob("*") if _.is_file()), "files under", OUT)
 
