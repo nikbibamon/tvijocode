@@ -1,0 +1,54 @@
+name: MCP - Publish
+
+# Tag mcp-vX.Y.Z publishes tvijo-dshrem-mcp to npm (trusted publishing with
+# provenance, no token) and then server.json to the MCP Registry as
+# com.tvijo/dshrem (DNS proof: TXT on tvijo.com, key in MCP_DNS_PRIVATE_KEY).
+# Gate it with required reviewers on the "mcp-publish" environment.
+
+on:
+  push:
+    tags:
+      - "mcp-v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: mcp-publish
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+
+      - name: Tag, package.json and server.json agree
+        run: |
+          V="${GITHUB_REF_NAME#mcp-v}"
+          test "$( jq -r .version package.json )" = "${V}"
+          test "$( jq -r .version server.json )" = "${V}"
+          test "$( jq -r '.packages[0].version' server.json )" = "${V}"
+          test "$( jq -r .mcpName package.json )" = "$( jq -r .name server.json )"
+
+      - run: npm ci
+      - run: npm test
+
+      - name: Publish to npm
+        run: npm publish --provenance --access public
+
+      - name: Publish to the MCP Registry
+        env:
+          MCP_DNS_PRIVATE_KEY: ${{ secrets.MCP_DNS_PRIVATE_KEY }}
+        run: |
+          ../tvijo/mcp_publisher.sh /tmp
+          /tmp/mcp-publisher login dns --domain tvijo.com --private-key "${MCP_DNS_PRIVATE_KEY}"
+          /tmp/mcp-publisher publish
