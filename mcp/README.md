@@ -4,6 +4,8 @@ Run Tvijo DSHREM as a Model Context Protocol server over stdio. Ask questions wi
 
 mcp-name: com.tvijo/dshrem
 
+Listed in the [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/servers?search=com.tvijo/dshrem) as `com.tvijo/dshrem`.
+
 Requires Node.js 20 or newer and a [Tvijo account](https://dsh.tvijo.com). This is an ESM JavaScript package with no build step.
 
 ## Sign in

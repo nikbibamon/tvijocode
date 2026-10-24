@@ -187,9 +187,10 @@ test('task status and cancel use the correct routes and escape task ids', async 
   ]);
 });
 
-test('CLI version is 0.1.0 without HTTP or sign-in', async () => {
+test('CLI version matches package.json without HTTP or sign-in', async () => {
+  const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
   const result = await execFileAsync(process.execPath, [bin, '--version'], { env: { PATH: process.env.PATH, HOME: await temporaryDirectory() } });
-  assert.equal(result.stdout, '0.1.0\n');
+  assert.equal(result.stdout, `${version}\n`);
   assert.equal(result.stderr, '');
 });
 

@@ -3,7 +3,7 @@
   "name": "com.tvijo/dshrem",
   "title": "Tvijo DSHREM",
   "description": "Ask Tvijo DSHREM with explicit spending limits and manage your account and tasks.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "websiteUrl": "https://dsh.tvijo.com",
   "icons": [
     {
@@ -23,7 +23,7 @@
     {
       "registryType": "npm",
       "identifier": "tvijo-dshrem-mcp",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       },
