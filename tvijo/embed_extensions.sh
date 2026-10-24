@@ -13,7 +13,7 @@ set -euo pipefail
 APP_DIR="${1:?usage: embed_extensions.sh <VSCode-platform-arch dir>}"
 LOCK="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )/extensions.lock.json"
 
-EXT_ROOT="$( find "${APP_DIR}" -maxdepth 6 -type d -path '*/resources/app/extensions' | head -1 )"
+EXT_ROOT="$( find "${APP_DIR}" -maxdepth 6 -type d -ipath '*/resources/app/extensions' | head -1 )"
 if [[ -z "${EXT_ROOT}" ]]; then
   echo "no resources/app/extensions under ${APP_DIR}" >&2
   exit 1
