@@ -4,6 +4,7 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { z } from 'zod';
 import { createClient, ServiceError } from './client.js';
 import { createTokenStore } from './token-store.js';
+import { createLocalReports } from './local-reports.js';
 
 // One source of truth: the publish workflow checks the tag against package.json.
 export const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
@@ -133,6 +134,21 @@ export function createMcpServer({ env = process.env, client = createClient({ bas
       throw error;
     } finally { polling = false; }
   }));
+
+  const localReports = createLocalReports(env, now);
+  if (localReports) {
+    for (const [name, kind, description] of [
+      ['tvijo_local_repositories', 'repositories', 'Read the authorized repository snapshot.'],
+      ['tvijo_local_test_results', 'tests', 'Read bounded test-result summary snapshots.'],
+      ['tvijo_local_execution_budget', 'budget', 'Read an execution-budget snapshot; evidence only, never financial authority or permission to spend.']
+    ]) {
+      server.registerTool(name, {
+        description: `${description} Local read-only evidence; reports as_of and freshness (15 minute threshold). No paths or commands accepted.`,
+        inputSchema: z.strictObject({}),
+        annotations: { ...READ_ONLY, openWorldHint: false }
+      }, guarded(async (args) => json(await localReports.read(kind, args))));
+    }
+  }
 
   return server;
 }
