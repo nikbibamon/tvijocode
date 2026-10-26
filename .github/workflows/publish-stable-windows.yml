@@ -12,6 +12,10 @@ name: Publish - Stable - Windows
 on:
   workflow_dispatch: {}
 
+concurrency:
+  group: tvijocode-windows-release
+  cancel-in-progress: false
+
 env:
   APP_NAME: TvijoCode
   ASSETS_REPOSITORY: ${{ github.repository }}
@@ -19,7 +23,7 @@ env:
   DISABLE_MSI: "yes"
   DISABLE_UPDATE: "yes"
   GH_REPO_PATH: ${{ github.repository }}
-  GITHUB_BRANCH: main
+  GITHUB_BRANCH: ${{ github.ref_name }}
   ORG_NAME: Tvijo
   OS_NAME: windows
   SHOULD_BUILD_CLI: "no"
@@ -31,8 +35,7 @@ env:
   SHOULD_DEPLOY: "no"
   VSCODE_ARCH: x64
   VSCODE_QUALITY: stable
-  # Releases kept on the Releases page; older VS Code-version releases are deleted.
-  KEEP_RELEASES: 3
+  # Existing releases and failed draft artifacts are retained for reconciliation.
 
 jobs:
   build:
@@ -46,8 +49,18 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: ${{ env.GITHUB_BRANCH }}
+          ref: ${{ github.sha }}
           persist-credentials: false
+
+      - name: Record exact selected source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          SOURCE_SHA="$( git rev-parse HEAD )"
+          test "${SOURCE_SHA}" = "${EXPECTED_SOURCE_SHA}"
+          echo "TVIJO_SOURCE_SHA=${SOURCE_SHA}" >> "${GITHUB_ENV}"
+          echo "TMPDIR=${RUNNER_TEMP}" >> "${GITHUB_ENV}"
+          echo "TVIJO_SMOKE_RECEIPT=${RUNNER_TEMP}/tvijo-windows-smoke.json" >> "${GITHUB_ENV}"
 
       - name: Setup Node.js environment
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
@@ -61,6 +74,16 @@ jobs:
 
       - name: Clone VSCode repo
         run: ./get_repo.sh
+
+      - name: Refuse an existing release version before building
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./release.sh --preflight
+
+      - name: Check release preservation offline
+        env:
+          TVIJO_RELEASE_TEST_TMP: ${{ runner.temp }}
+        run: node --test tvijo/release-safety.test.mjs
 
       - name: Check existing tags/releases
         env:
@@ -112,10 +135,11 @@ jobs:
             assets/*.exe
             assets/*.zip
           retention-days: 3
-        if: env.SHOULD_BUILD == 'yes'
+        if: always() && env.SHOULD_BUILD == 'yes'
 
       - name: Prepare checksums
-        run: ./prepare_checksums.sh
+        # release.sh computes SHA-256 itself; no global npm dependency is needed.
+        run: echo "Checksums and source receipt are generated from the final assets during publication."
         if: env.SHOULD_BUILD == 'yes'
 
       - name: Release
@@ -124,8 +148,16 @@ jobs:
         run: ./release.sh
         if: env.SHOULD_BUILD == 'yes'
 
-      - name: Delete old releases
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: ./tvijo/prune_releases.sh "${KEEP_RELEASES}"
-        if: env.SHOULD_BUILD == 'yes'
+      - name: Retain native smoke and publication evidence
+        if: always() && (env.TVIJO_SMOKE_WORK != '' || env.TVIJO_EMBED_WORK != '')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tvijocode-windows-evidence-${{ github.run_id }}
+          path: |
+            ${{ env.TVIJO_SMOKE_WORK }}
+            ${{ env.TVIJO_EMBED_WORK }}
+            ${{ env.TVIJO_SMOKE_RECEIPT }}
+            assets/BUILD_RECEIPT.json
+            assets/WINDOWS_SMOKE.json
+            ${{ runner.temp }}/tvijo-publish-*/publication.json
+          retention-days: 14

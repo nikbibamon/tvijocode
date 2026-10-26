@@ -24,7 +24,12 @@ sha256() {
 }
 
 WORK="$( mktemp -d )"
-trap 'rm -rf "${WORK}"' EXIT
+echo "Extension extraction evidence retained in ${WORK}"
+if [[ -n "${GITHUB_ENV:-}" ]]; then
+  EVIDENCE_PATH="${WORK}"
+  if command -v cygpath >/dev/null; then EVIDENCE_PATH="$( cygpath -w "${WORK}" )"; fi
+  echo "TVIJO_EMBED_WORK=${EVIDENCE_PATH}" >> "${GITHUB_ENV}"
+fi
 
 # Index loop, not mapfile: macOS runners may still start bash 3.2.
 COUNT="$( jq 'length' "${LOCK}" )"
@@ -47,10 +52,33 @@ for (( i = 0; i < COUNT; i++ )); do
     exit 1
   fi
 
-  unzip -q "${WORK}/${DIR}.vsix" 'extension/*' -d "${WORK}/${DIR}"
-  rm -rf "${EXT_ROOT:?}/${DIR}"
+  # MSYS2 unzip enables WILD_STOP_AT_DIR: one * drops lib/ and media/.
+  # Two stars match nested files on MSYS2 as well as ordinary Unix unzip.
+  unzip -q "${WORK}/${DIR}.vsix" 'extension/**' -d "${WORK}/${DIR}"
+  if [[ -e "${EXT_ROOT}/${DIR}" ]]; then
+    echo "Refusing to replace existing ${EXT_ROOT}/${DIR}; preserve and reconcile" >&2
+    exit 1
+  fi
   mkdir -p "${EXT_ROOT}/${DIR}"
   cp -R "${WORK}/${DIR}/extension/." "${EXT_ROOT}/${DIR}/"
+
+  python3 - "${WORK}/${DIR}.vsix" "${EXT_ROOT}/${DIR}" "${WORK}/${DIR}-files.json" <<'PY_VERIFY'
+from pathlib import Path
+import hashlib, json, sys, zipfile
+archive, target, receipt = Path(sys.argv[1]), Path(sys.argv[2]), Path(sys.argv[3])
+with zipfile.ZipFile(archive) as source:
+    expected = {i.filename[len('extension/'):]: hashlib.sha256(source.read(i)).hexdigest()
+                for i in source.infolist() if i.filename.startswith('extension/') and not i.is_dir()}
+actual = {p.relative_to(target).as_posix(): hashlib.sha256(p.read_bytes()).hexdigest()
+          for p in target.rglob('*') if p.is_file()}
+result = {'files': len(expected), 'missing': sorted(set(expected) - set(actual)),
+          'unexpected': sorted(set(actual) - set(expected)),
+          'changed': sorted(p for p in expected.keys() & actual.keys() if expected[p] != actual[p]),
+          'expected': expected, 'actual': actual}
+with receipt.open('x', encoding='utf-8') as output:
+    json.dump(result, output, indent=2)
+assert expected == actual, 'Embedded extension differs from the pinned VSIX: ' + str(receipt)
+PY_VERIFY
 
   GOT_VERSION="$( jq -r '.version' "${EXT_ROOT}/${DIR}/package.json" )"
   if [[ "${GOT_VERSION}" != "${WANT_VERSION}" ]]; then
