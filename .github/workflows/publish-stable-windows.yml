@@ -135,7 +135,7 @@ jobs:
             assets/*.exe
             assets/*.zip
           retention-days: 3
-        if: env.SHOULD_BUILD == 'yes'
+        if: always() && env.SHOULD_BUILD == 'yes'
 
       - name: Prepare checksums
         # release.sh computes SHA-256 itself; no global npm dependency is needed.
@@ -149,12 +149,13 @@ jobs:
         if: env.SHOULD_BUILD == 'yes'
 
       - name: Retain native smoke and publication evidence
-        if: always() && env.TVIJO_SMOKE_WORK != ''
+        if: always() && (env.TVIJO_SMOKE_WORK != '' || env.TVIJO_EMBED_WORK != '')
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: tvijocode-windows-evidence-${{ github.run_id }}
           path: |
             ${{ env.TVIJO_SMOKE_WORK }}
+            ${{ env.TVIJO_EMBED_WORK }}
             ${{ env.TVIJO_SMOKE_RECEIPT }}
             assets/BUILD_RECEIPT.json
             assets/WINDOWS_SMOKE.json

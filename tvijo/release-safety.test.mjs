@@ -3,7 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
-import { fileURLToPath } from 'node:url';
+import { fileURLToPath, pathToFileURL } from 'node:url';
+import { createHash } from 'node:crypto';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const parent = process.env.TVIJO_RELEASE_TEST_TMP;
@@ -160,4 +161,34 @@ test('workflow pins selected source and never invokes release pruning', () => {
   const downloads = [...notes.matchAll(/\]\((https:[^)]+\/releases\/download\/[^)]+)\)/g)].map(m => m[1]);
   assert.equal(downloads.length, 4);
   assert.ok(downloads.every(u => /\.(exe|zip|json)$/.test(u)));
+});
+
+test('real embed script retains nested lib/media bytes and refuses an existing target', () => {
+  const dir = fs.mkdtempSync(path.join(parent, 'release-embed-'));
+  const app = path.join(dir, 'app');
+  const extensionRoot = path.join(app, 'resources', 'app', 'extensions');
+  const tmp = path.join(dir, 'tmp');
+  fs.mkdirSync(extensionRoot, {recursive:true}); fs.mkdirSync(tmp);
+  const archive = path.join(dir, 'fixture.vsix');
+  const sources = {'package.json':'{"version":"0.0.1"}', 'lib/client.js':'module.exports = 42;\n',
+    'media/learning-guide.html':'<h1>Nested guide</h1>\n', 'lib/deep/nested.js':'exports.nested=true;\n'};
+  const python = 'import json,sys,zipfile\nwith zipfile.ZipFile(sys.argv[1],"w") as z:\n for p,b in json.loads(sys.argv[2]).items(): z.writestr("extension/"+p,b)\n';
+  const made = spawnSync('python3', ['-c', python, archive, JSON.stringify(sources)], {encoding:'utf8'});
+  assert.equal(made.status,0,made.stderr);
+  const digest = createHash('sha256').update(fs.readFileSync(archive)).digest('hex');
+  fs.writeFileSync(path.join(dir,'extensions.lock.json'),JSON.stringify([{id:'fixture.extension',dir:'fixture-extension',
+    version:'0.0.1',url:pathToFileURL(archive).href,sha256:digest}]));
+  const script = path.join(dir,'embed_extensions.sh');
+  fs.copyFileSync(path.join(root,'tvijo/embed_extensions.sh'),script);
+  const env = {...process.env,TMPDIR:tmp,GITHUB_ENV:path.join(dir,'env-record')};
+  const embedded=spawnSync('bash',[script,app],{env,encoding:'utf8',timeout:30000});
+  assert.equal(embedded.status,0,embedded.stdout+'\n'+embedded.stderr);
+  const target=path.join(extensionRoot,'fixture-extension');
+  for(const [file,bytes] of Object.entries(sources)) assert.equal(fs.readFileSync(path.join(target,file),'utf8'),bytes,file);
+  fs.writeFileSync(path.join(target,'preserve-user.txt'),'protected bytes');
+  const refused=spawnSync('bash',[script,app],{env,encoding:'utf8',timeout:30000});
+  assert.notEqual(refused.status,0);
+  assert.match(refused.stderr,/Refusing to replace existing/);
+  assert.equal(fs.readFileSync(path.join(target,'preserve-user.txt'),'utf8'),'protected bytes');
+  for(const [file,bytes] of Object.entries(sources)) assert.equal(fs.readFileSync(path.join(target,file),'utf8'),bytes,file);
 });

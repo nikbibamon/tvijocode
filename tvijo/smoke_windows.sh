@@ -78,6 +78,11 @@ with zipfile.ZipFile(vsix) as archive:
     files = {i.filename[len('extension/'):]: i for i in archive.infolist()
              if i.filename.startswith('extension/') and not i.is_dir()}
     actual = {p.relative_to(extension).as_posix(): p for p in extension.rglob('*') if p.is_file()}
+    comparison = {'expected': sorted(files), 'actual': sorted(actual),
+        'missing': sorted(set(files) - set(actual)), 'unexpected': sorted(set(actual) - set(files)),
+        'extension_directory': str(extension)}
+    (work / 'embedded-comparison.json').write_text(json.dumps(comparison, indent=2), encoding='utf-8')
+    print('EMBEDDED FILE SET:', json.dumps({'missing': comparison['missing'], 'unexpected': comparison['unexpected']}))
     assert set(actual) == set(files), 'Embedded extension exact file set'
     for name, info in files.items():
         assert not actual[name].is_symlink(), 'No embedded runtime symlink'
