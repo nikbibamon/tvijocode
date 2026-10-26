@@ -16,7 +16,7 @@ TVIJO_DIR="../tvijo"
 cp -rp "${TVIJO_DIR}/src/stable/." .
 
 # Identity: VSCodium hardcodes its names in prepare_vscode.sh, ours win the merge.
-jsonTmp=$( jq -s '.[0] * .[1]' product.json "${TVIJO_DIR}/product.json" )
+jsonTmp=$( jq -s '.[0] as $base | .[1] as $brand | $base * $brand | .builtInExtensionsEnabledWithAutoUpdates = (($base.builtInExtensionsEnabledWithAutoUpdates // []) + ($brand.builtInExtensionsEnabledWithAutoUpdates // []) | unique)' product.json "${TVIJO_DIR}/product.json" )
 echo "${jsonTmp}" > product.json && unset jsonTmp
 
 replace 's|"VSCodium"|"Tvijo"|' package.json
