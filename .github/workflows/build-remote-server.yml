@@ -1,0 +1,112 @@
+name: Build matching Linux Remote SSH server
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_version:
+        description: Existing Windows release requiring Linux x64 REH
+        required: true
+        default: '1.140.07195'
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: remote-server-${{ inputs.release_version }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-22.04
+    defaults:
+      run:
+        shell: bash
+    env:
+      RELEASE_VERSION: ${{ inputs.release_version }}
+      APP_NAME: TvijoCode
+      BINARY_NAME: tvijocode
+      ORG_NAME: Tvijo
+      OS_NAME: linux
+      VSCODE_ARCH: x64
+      VSCODE_QUALITY: stable
+      CI_BUILD: 'yes'
+      SHOULD_BUILD: 'yes'
+      SHOULD_BUILD_REH: 'yes'
+      SHOULD_BUILD_REH_WEB: 'no'
+      SHOULD_BUILD_CLI: 'no'
+      DISABLE_UPDATE: 'yes'
+      GH_REPO_PATH: ${{ github.repository }}
+      MAX_OLD_SPACE_SIZE: '6144'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          persist-credentials: false
+          path: tools
+
+      - name: Resolve and validate existing Windows evidence
+        id: plan
+        run: |
+          set -euo pipefail
+          [[ "$RELEASE_VERSION" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]
+          mkdir "$RUNNER_TEMP/reh-evidence"
+          BASE="https://github.com/nikbibamon/tvijocode/releases/download/$RELEASE_VERSION"
+          curl -fsSL "$BASE/BUILD_RECEIPT.json" -o "$RUNNER_TEMP/reh-evidence/BUILD_RECEIPT.json"
+          curl -fsSL "$BASE/WINDOWS_SMOKE.json" -o "$RUNNER_TEMP/reh-evidence/WINDOWS_SMOKE.json"
+          python3 tools/tvijo/remote_server.py plan "$RELEASE_VERSION" "$RUNNER_TEMP/reh-evidence/BUILD_RECEIPT.json" "$RUNNER_TEMP/reh-evidence/WINDOWS_SMOKE.json" "$RUNNER_TEMP/reh-evidence/plan.json"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          d=json.loads((Path(os.environ['RUNNER_TEMP'])/'reh-evidence/plan.json').read_text())
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:
+              f.write('source_commit='+d['source_commit']+'\n')
+          with open(os.environ['GITHUB_ENV'],'a') as f:
+              f.write('BUILD_SOURCEVERSION='+d['runtime_commit']+'\n')
+              f.write('EXPECTED_MS_COMMIT='+d['upstream_commit']+'\n')
+          PY
+
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ steps.plan.outputs.source_commit }}
+          persist-credentials: false
+          path: builder
+
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: builder/.nvmrc
+
+      - name: Offline receipt and archive regressions
+        run: python3 -m unittest discover -s tools/tvijo -p test_remote_server.py -v
+        env:
+          TMPDIR: ${{ runner.temp }}
+
+      - name: Build only the matching Linux remote extension host
+        working-directory: builder
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = '${{ steps.plan.outputs.source_commit }}'
+          ./build/linux/deps.sh
+          ./get_repo.sh
+          test "$(git -C vscode rev-parse HEAD)" = "$EXPECTED_MS_COMMIT"
+          ./build.sh
+
+      - name: Embed exact VSIX, smoke native server and create archive
+        run: |
+          set -euo pipefail
+          ROOT="$RUNNER_TEMP/reh-evidence"
+          TREE="$GITHUB_WORKSPACE/builder/vscode-reh-linux-x64"
+          URL="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["extension"]["url"])' "$ROOT/plan.json")"
+          curl -fsSL "$URL" -o "$ROOT/tvijo.vsix"
+          python3 tools/tvijo/remote_server.py embed "$TREE" "$ROOT/plan.json" "$ROOT/embed" "$ROOT/tvijo.vsix"
+          python3 tools/tvijo/remote_server.py smoke "$TREE" "$ROOT/plan.json" "$ROOT/REH_SMOKE" "$ROOT/tvijo.vsix"
+          python3 tools/tvijo/remote_server.py pack "$TREE" "$ROOT/plan.json" "$ROOT/tvijocode-reh-linux-x64-$RELEASE_VERSION.tar.gz"
+
+      # Artifacts only: this workflow cannot mutate a release or its existing assets.
+      - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        if: always()
+        with:
+          name: remote-server-${{ inputs.release_version }}-${{ github.run_id }}
+          path: |
+            ${{ runner.temp }}/reh-evidence/*.json
+            ${{ runner.temp }}/reh-evidence/*.tar.gz
+          retention-days: 14
