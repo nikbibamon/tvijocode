@@ -111,6 +111,36 @@ class RemoteServerTests(unittest.TestCase):
                 remote.pack(tree, spec, archive)
             self.assertEqual(archive.read_bytes(), b'previous artifact')
 
+    def test_embed_preserves_product_identity_and_narrow_update_policy(self):
+        spec = self.spec()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); tree = self.tree(root / 'tree')
+            vsix = self.vsix(root / 'extension.vsix', spec)
+            product_path = tree / 'product.json'
+            before = json.loads(product_path.read_text())
+            before['quality'] = 'stable'
+            before['builtInExtensionsEnabledWithAutoUpdates'] = ['other.existing']
+            product_path.write_text(json.dumps(before))
+            remote.embed(tree, vsix, spec)
+            after = json.loads(product_path.read_text())
+            self.assertEqual(after.pop('builtInExtensionsEnabledWithAutoUpdates'),
+                             ['other.existing', 'tvijo.tvijo-dshrem'])
+            before.pop('builtInExtensionsEnabledWithAutoUpdates')
+            self.assertEqual(after, before)
+
+    def test_invalid_product_policy_is_rejected_before_embedding(self):
+        spec = self.spec()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); tree = self.tree(root / 'tree')
+            vsix = self.vsix(root / 'extension.vsix', spec)
+            product_path = tree / 'product.json'
+            product = json.loads(product_path.read_text())
+            product['builtInExtensionsEnabledWithAutoUpdates'] = '*'
+            product_path.write_text(json.dumps(product))
+            with self.assertRaisesRegex(ValueError, 'update policy'):
+                remote.embed(tree, vsix, spec)
+            self.assertFalse((tree / 'extensions/tvijo-dshrem').exists())
+
     def test_vsix_traversal_rejected_before_any_extension_write(self):
         for path in ['extension/../outside', 'extension//absolute', 'extension/lib\\bad.js']:
             with self.subTest(path=path), tempfile.TemporaryDirectory() as tmp:

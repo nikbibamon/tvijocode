@@ -21,6 +21,14 @@ commit. It embeds the exact pinned Tvijo VSIX into the server's `extensions/`
 directory, preserving all nested files. Existing paths and artifacts are never
 replaced.
 
+CI run 40396992313 exposed a second prerequisite: stable Code OSS rejects a
+VSIX over a bundled extension unless its ID is in the product's supported
+`builtInExtensionsEnabledWithAutoUpdates` list. The REH packaging helper adds
+only `tvijo.tvijo-dshrem` to that list, preserving other product fields and
+existing entries. Runtime commit, extension compatibility and downgrade checks
+remain enforced. This change affects the new Linux server; it does not alter
+the previously published Windows desktop files.
+
 The native Linux smoke checks CLI version/commit, isolated VSIX installation and
 listing, loopback startup and `/version`. It does **not** prove a Windows SSH
 connection, remote extension activation, chat rendering, login or a complete

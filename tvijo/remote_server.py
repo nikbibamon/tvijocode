@@ -95,6 +95,11 @@ def embed(tree, vsix, spec):
     if (package['version'] != spec['extension']['version']
             or package['publisher'] != 'tvijo' or package['name'] != 'tvijo-dshrem'):
         raise ValueError('VSIX identity mismatch')
+    product_path = Path(tree) / 'product.json'
+    product = json.loads(product_path.read_text())
+    allowed = product.get('builtInExtensionsEnabledWithAutoUpdates', [])
+    if not isinstance(allowed, list) or not all(isinstance(value, str) for value in allowed):
+        raise ValueError('Invalid built-in extension update policy')
     # Validate the whole archive before writing; never replace an existing path.
     target.mkdir(parents=True, exist_ok=False)
     for name, content in files.items():
@@ -102,7 +107,15 @@ def embed(tree, vsix, spec):
         path.parent.mkdir(parents=True, exist_ok=True)
         with path.open('xb') as output:
             output.write(content)
-    return {'files': len(files), 'exact_vsix_bytes': True}
+    # Stable Code OSS rejects VSIX updates of bundled extensions unless the
+    # product explicitly enables this supported policy for that extension ID.
+    # Retain every existing product field and allowlist entry; do not relax the
+    # compatibility/version checks or enable updates for unrelated extensions.
+    if spec['extension']['id'].lower() not in [value.lower() for value in allowed]:
+        product['builtInExtensionsEnabledWithAutoUpdates'] = [*allowed, spec['extension']['id']]
+        product_path.write_text(json.dumps(product, indent=2) + '\n')
+    return {'files': len(files), 'exact_vsix_bytes': True,
+            'builtin_vsix_updates_enabled_for': spec['extension']['id']}
 
 
 def smoke(tree, vsix, spec, output):
