@@ -6,6 +6,7 @@ from pathlib import Path
 import tarfile
 import tempfile
 import unittest
+from unittest.mock import patch
 import zipfile
 
 import remote_server as remote
@@ -130,6 +131,20 @@ class RemoteServerTests(unittest.TestCase):
             (tree / 'extensions').symlink_to(root, target_is_directory=True)
             with self.assertRaises(ValueError):
                 remote.embed(tree, vsix, spec)
+
+    def test_native_cli_failure_retains_actual_stderr_and_does_not_claim_pass(self):
+        spec = self.spec()
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp); tree = self.tree(root / 'tree')
+            vsix = self.vsix(root / 'extension.vsix', spec)
+            outputs = [remote.subprocess.CompletedProcess([], 0, self.commit, ''),
+                       remote.subprocess.CompletedProcess([], 1, '', 'synthetic VSIX rejection')]
+            with patch.object(remote.subprocess, 'run', side_effect=outputs):
+                with self.assertRaisesRegex(RuntimeError, 'synthetic VSIX rejection'):
+                    remote.smoke(tree, vsix, spec, root / 'smoke')
+            diagnostic = json.loads((root / 'smoke/cli-2.json').read_text())
+            self.assertEqual(diagnostic['returncode'], 1)
+            self.assertEqual(diagnostic['stderr'], 'synthetic VSIX rejection')
 
 
 if __name__ == '__main__':

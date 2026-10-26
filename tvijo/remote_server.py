@@ -116,10 +116,19 @@ def smoke(tree, vsix, spec, output):
               '--extensions-dir', str(output / 'extensions')]
     env = {k: v for k, v in os.environ.items()
            if k not in ('OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GH_TOKEN', 'GITHUB_TOKEN')}
+    invocation = 0
 
     def run(*args):
+        nonlocal invocation
+        invocation += 1
         result = subprocess.run([launcher, *common, *args], env=env, text=True,
-                                capture_output=True, timeout=90, check=True)
+                                capture_output=True, timeout=90, check=False)
+        receipt = output / f'cli-{invocation}.json'
+        write_new(receipt, {'arguments': list(args), 'returncode': result.returncode,
+                            'stdout': result.stdout[-131072:], 'stderr': result.stderr[-131072:]})
+        if result.returncode:
+            raise RuntimeError(f'Native server CLI failed; retained diagnostic: {receipt}: '
+                               + result.stderr[-4000:] + result.stdout[-4000:])
         return result.stdout
 
     version = run('--version')

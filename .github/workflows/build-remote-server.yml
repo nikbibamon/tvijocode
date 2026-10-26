@@ -98,8 +98,10 @@ jobs:
           URL="$(python3 -c 'import json,sys;print(json.load(open(sys.argv[1]))["extension"]["url"])' "$ROOT/plan.json")"
           curl -fsSL "$URL" -o "$ROOT/tvijo.vsix"
           python3 tools/tvijo/remote_server.py embed "$TREE" "$ROOT/plan.json" "$ROOT/embed" "$ROOT/tvijo.vsix"
-          python3 tools/tvijo/remote_server.py smoke "$TREE" "$ROOT/plan.json" "$ROOT/REH_SMOKE" "$ROOT/tvijo.vsix"
+          # Preserve the exact candidate even if native acceptance fails. It is
+          # never a publishable release without the separate passing smoke receipt.
           python3 tools/tvijo/remote_server.py pack "$TREE" "$ROOT/plan.json" "$ROOT/tvijocode-reh-linux-x64-$RELEASE_VERSION.tar.gz"
+          python3 tools/tvijo/remote_server.py smoke "$TREE" "$ROOT/plan.json" "$ROOT/REH_SMOKE" "$ROOT/tvijo.vsix"
 
       # Artifacts only: this workflow cannot mutate a release or its existing assets.
       - uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
@@ -109,4 +111,5 @@ jobs:
           path: |
             ${{ runner.temp }}/reh-evidence/*.json
             ${{ runner.temp }}/reh-evidence/*.tar.gz
+            ${{ runner.temp }}/reh-evidence/REH_SMOKE.state/*.json
           retention-days: 14
