@@ -19,12 +19,12 @@ def fail(message):
     raise RuntimeError(message)
 
 
-def gh(*args, binary=False):
+def gh(*args, binary=False, input_text=None):
     executable = shutil.which("gh")
     if executable is None:
         fail("GitHub CLI is unavailable")
     return subprocess.run([executable, *args], capture_output=True, text=not binary,
-                          timeout=180, check=False)
+                          timeout=180, check=False, input=input_text)
 
 
 def missing(result):
@@ -134,13 +134,21 @@ def main():
                  "ref=refs/tags/" + version, "-f", "sha=" + source)
     if reserve.returncode:
         fail("Could not reserve fresh tag; preserved state requires reconciliation")
-    create = gh("release", "create", version, "--repo", repo, "--verify-tag",
-                "--draft", "--title", "Tvijo Code " + version,
-                "--notes-file", str(notes_path))
+    # Drafts can be absent from the tag lookup endpoint. Capture the creation
+    # response's identity directly; never retry/adopt an ambiguous creation.
+    create = gh("api", "--method", "POST", api + "/releases", "--input", "-",
+                input_text=json.dumps({"tag_name": version, "target_commitish": source,
+                                      "draft": True, "name": "Tvijo Code " + version,
+                                      "body": notes}))
     if create.returncode:
         fail("Draft creation failed or ambiguous; reserved tag is preserved")
-    release = read_api(api + "/releases/tags/" + version)
-    release_id = release["id"]
+    created = json.loads(create.stdout)
+    release_id = created.get("id")
+    if (not isinstance(release_id, int) or isinstance(release_id, bool)
+            or release_id <= 0 or not created.get("draft")
+            or created.get("tag_name") != version):
+        fail("Draft creation returned an invalid identity; preserved without adoption")
+    release = read_api(api + "/releases/" + str(release_id))
     if not release.get("draft") or release.get("tag_name") != version or release.get("assets"):
         fail("Unexpected new draft state; preserving it without upload")
 

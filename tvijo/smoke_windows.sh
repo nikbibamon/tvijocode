@@ -151,7 +151,7 @@ exports.run = async () => {
     extension_version:tvijo.packageJSON.version,commands:['tvijo.openChat','tvijo.openLearningGuide'],
     learning_guide:{opened:true,title:guideTab.label},code_intelligence:results},null,2),{flag:'wx'});
 };
-''')
+''', encoding='utf-8')
 user = work / 'user-data'
 (user / 'User').mkdir(parents=True)
 (user / 'User/settings.json').write_text(json.dumps({'tvijo.apiBase': 'http://127.0.0.1:9/api/dshrem/v1',

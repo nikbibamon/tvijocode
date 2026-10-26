@@ -20,8 +20,13 @@ def absent(): finish({'message':'Not Found','status':'404'},1)
 mode=s['mode']
 if a[0]=='api':
  if '--method' in a:
-  if mode=='tag-race': finish({'message':'Reference already exists'},1)
-  s['tag']=True; finish({'ref':'new'})
+  if any(x.endswith('/git/refs') for x in a):
+   if mode=='tag-race': finish({'message':'Reference already exists'},1)
+   s['tag']=True; finish({'ref':'new'})
+  if any(x.endswith('/releases') for x in a):
+   s['created_request']=json.loads(sys.stdin.read());s['exists']=True;s['draft']=True
+   if mode=='create-response-lost': finish({'message':'Response lost'},1)
+   finish({'id':1,'tag_name':os.environ['RELEASE_VERSION'],'draft':True,'assets':[]})
  endpoint=a[1]
  if mode=='forbidden': finish({'message':'Forbidden','status':'403'},1)
  if '/releases/assets/' in endpoint:
@@ -31,6 +36,7 @@ if a[0]=='api':
   absent()
  if '/releases/' in endpoint:
   if not s['exists']: absent()
+  if mode=='draft-tag-404' and '/releases/tags/' in endpoint and s['draft']: absent()
   finish({'id':1,'tag_name':os.environ['RELEASE_VERSION'],'draft':s['draft'],'html_url':'https://example.test/release','assets':[{k:v for k,v in x.items() if k!='content'} for x in s['assets']]})
 if a[:2]==['release','create']:
  s['exists']=True;s['draft']=True;finish({'created':True})
@@ -105,7 +111,8 @@ test('new version publishes only after downloading and verifying all exact asset
   assert.equal(state.published, true);
   assert.equal(state.assets.length, 6);
   assert.equal(state.calls.filter(a => a[0] === 'api' && a[1].includes('/releases/assets/')).length, 6);
-  assert.ok(state.calls.find(a => a[1] === 'create').includes('--draft'));
+  assert.equal(state.created_request.draft, true);
+  assert.match(state.created_request.target_commitish, /^[a-f0-9]{40}$/);
 });
 for (const mode of ['response-lost', 'retry']) {
   test(`${mode}: accepted bytes survive, missing upload retries are bounded`, () => {
@@ -116,15 +123,27 @@ for (const mode of ['response-lost', 'retry']) {
     assert.equal(state.published, true);
   });
 }
-for (const mode of ['corrupt', 'exhausted', 'tag-race', 'moved-tag']) {
+for (const mode of ['corrupt', 'exhausted', 'tag-race', 'moved-tag', 'create-response-lost']) {
   test(`${mode}: preserves evidence and refuses publication`, () => {
     const { result, state } = run(mode);
     assert.equal(result.status, 1, result.stdout + result.stderr);
     assert.equal(state.published, false);
     if (mode === 'corrupt') assert.ok(state.assets.length > 0);
     if (mode === 'exhausted') assert.equal(Math.max(...Object.values(state.attempts)), 3);
+    if (mode === 'create-response-lost') {
+      assert.equal(state.draft, true);
+      assert.equal(state.assets.length, 0);
+      assert.equal(state.calls.filter(a => a.includes('--method') && a.some(x => x.endsWith('/releases'))).length, 1);
+    }
   });
 }
+test('draft tag endpoint returns 404: creation ID is used for every draft read', () => {
+  const { result, state } = run('draft-tag-404');
+  assert.equal(result.status, 0, result.stderr);
+  assert.equal(state.published, true);
+  assert.equal(state.calls.filter(a => a[0] === 'api' && a[1].includes('/releases/tags/')).length, 1);
+  assert.ok(state.calls.some(a => a[0] === 'api' && a[1].endsWith('/releases/1')));
+});
 test('preflight checks availability without creating a tag or release', () => {
   const { result, state } = run('normal', ['--preflight']);
   assert.equal(result.status, 0, result.stderr);
