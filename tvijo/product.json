@@ -5,6 +5,7 @@
   "dataFolderName": ".tvijocode",
   "linuxIconName": "tvijocode",
   "quality": "stable",
+  "builtInExtensionsEnabledWithAutoUpdates": ["tvijo.tvijo-dshrem"],
   "urlProtocol": "tvijocode",
   "serverApplicationName": "tvijocode-server",
   "serverDataFolderName": ".tvijocode-server",
