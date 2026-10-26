@@ -1,5 +1,24 @@
 # Remote SSH: Windows 1.140.07195
 
+## Published Linux x64 server — 2026-10-26 20:51 UTC
+
+The missing asset has been added to the existing release after passing
+[CI40397971052](https://github.com/nikbibamon/tvijocode/actions/runs/40397971052).
+[Server archive](https://github.com/nikbibamon/tvijocode/releases/download/1.140.07195/tvijocode-reh-linux-x64-1.140.07195.tar.gz):
+88,165,345 bytes; SHA-256
+`533f88ad1b623b13deafca0016a28090c965edd5f9b66503b3d507d12746c1c8`.
+Anonymous download and checksum verification passed. Original EXE/ZIP, receipts,
+tag and failed candidates are preserved. Native CLI, VSIX installation/listing
+and loopback startup pass with the installed Windows runtime commit. Existing
+built-in update entries are retained; only Tvijo is added to that policy.
+[Receipt and explicit test limits](https://github.com/nikbibamon/tvijocode/releases/download/1.140.07195/REMOTE_SERVER_RECEIPT.json).
+
+Reconnect from Windows with Open Remote SSH; the same download URL now returns200.
+Do not delete your profile or remote files. Actual Windows SSH connection,
+Explorer/terminal and remote Tvijo activation/chat are **not verified yet**.
+The earlier404 and failed builds below are retained as the repair history.
+The unified Codex/Claude/Copilot UI is still pending implementation.
+
 Observed 2026-10-26: Open Remote SSH 0.5.1 authenticates successfully, then
 requests `tvijocode-reh-linux-x64-1.140.07195.tar.gz` from the Windows release.
 That asset is absent (HTTP 404). Windows CLI/extension smoke does not cover an
