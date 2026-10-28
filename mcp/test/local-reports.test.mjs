@@ -11,7 +11,7 @@ import { fakeApi, packageDir } from './helpers/fake-api.mjs';
 
 const clock = Date.parse('2026-10-25T01:00:00Z');
 const timestamp = '2026-10-25T00:59:00Z';
-const baseNames = ['tvijo_account', 'tvijo_ask', 'tvijo_cancel_task', 'tvijo_login_poll', 'tvijo_login_start', 'tvijo_task_status'];
+const baseNames = ['tvijo_account', 'tvijo_ask', 'tvijo_cancel_task', 'tvijo_login_poll', 'tvijo_login_start', 'tvijo_review', 'tvijo_task_status'];
 const localNames = ['tvijo_local_repositories', 'tvijo_local_test_results', 'tvijo_local_execution_budget'];
 const repositories = { as_of: timestamp, repositories: [{ id: 'aios', head: 'a'.repeat(40), worktree: 'dirty', allowed: true }] };
 const tests = { as_of: timestamp, results: [{ repository: 'aios', suite: 'incremental-index', status: 'PASS', passed: 30, failed: 0, skipped: 0, not_run: 0, total: 30, duration_ms: 10 }] };
@@ -132,7 +132,7 @@ test('root, file and parent symlink escape refused, including root replacement',
   await symlink(outside, changed); await assert.rejects(reader.read('repositories'));
 });
 
-test('real stdio default tools/list remains six for each incomplete opt-in', async (t) => {
+test('real stdio default tools/list remains seven for each incomplete opt-in', async (t) => {
   const api = await fakeApi(t, () => { throw new Error('No HTTP expected'); });
   const { root } = await fixture();
   for (const config of [{}, { TVIJO_LOCAL_REPORTS: '1' }, { TVIJO_LOCAL_REPORT_ROOT: root }]) {
@@ -141,7 +141,7 @@ test('real stdio default tools/list remains six for each incomplete opt-in', asy
     await client.close();
   }
   assert.equal(api.requests.length, 0);
-  t.diagnostic('STDIO_DEFAULT: six tools; three incomplete opt-ins; HTTP requests=0');
+  t.diagnostic('STDIO_DEFAULT: seven tools; three incomplete opt-ins; HTTP requests=0');
 });
 
 test('real stdio snapshots, annotations, redactor and no HTTP side effects', async (t) => {

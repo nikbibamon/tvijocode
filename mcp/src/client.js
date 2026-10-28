@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto';
+import { clientTag } from './client-tag.js';
 
 export const DEFAULT_API_BASE = 'https://dsh.tvijo.com/api/dshrem/v1';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
@@ -104,8 +105,9 @@ function answerOf(taskId, response, recovered = false) {
 
 export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = globalThis.fetch, sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms)), now = () => Date.now(), timeoutMs = 30_000, chatTimeoutMs = 210_000 } = {}) {
   const root = apiBase(base);
+  let clientName = () => undefined;
 
-  async function request(path, { token, method = 'GET', body, signal, timeoutMs: limit = timeoutMs } = {}) {
+  async function request(path, { token, method = 'GET', body, signal, offer = 'none', timeoutMs: limit = timeoutMs } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), limit);
     const relay = () => controller.abort();
@@ -113,7 +115,7 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
     try {
       const response = await fetchImpl(root + path, {
         method,
-        headers: { ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
+        headers: { 'X-Tvijo-Client': clientTag(clientName(), offer), ...(body === undefined ? {} : { 'content-type': 'application/json' }), ...(token ? { authorization: `Bearer ${token}` } : {}) },
         ...(body === undefined ? {} : { body: JSON.stringify(body) }),
         signal: controller.signal,
         redirect: 'error'
@@ -165,24 +167,25 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
     throw new ServiceError('request_expired', 'Device authorization expired. Sign in again.');
   }
 
-  async function task(token, taskId) {
-    const snapshot = await request(`/tasks/${encodeURIComponent(taskId)}`, { token });
+  async function task(token, taskId, offer = 'none') {
+    const snapshot = await request(`/tasks/${encodeURIComponent(taskId)}`, { token, offer });
     if (!snapshot || (snapshot.id && snapshot.id !== taskId) || (snapshot.task?.id && snapshot.task.id !== taskId)) throw new ServiceError('incomplete', 'Task response identity mismatch.');
     return snapshot;
   }
 
-  async function ask({ maxUsd = 1, token, messages, idempotencyKey = randomUUID(), title = 'MCP', maxTokens = 2048, model = 'coding', mode = 'single', method = 'evidence-first', signal }) {
+  async function ask({ maxUsd = 1, token, messages, idempotencyKey = randomUUID(), title = 'MCP', maxTokens = 2048, model = 'coding', mode = 'single', method = 'evidence-first', signal, offer = 'ask', lookupOnTimeoutOnly = false }) {
     if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new ServiceError('invalid_amount', 'max_usd must be a positive finite number.');
     if (!Array.isArray(messages) || messages.length < 1 || messages.length > 80) throw new ServiceError('invalid_messages', 'Conversation must have 1-80 messages.');
     if (Buffer.byteLength(JSON.stringify(messages), 'utf8') > 110 * 1024) throw new ServiceError('context_limit', 'Conversation exceeds the per-task context bound.');
     let grant;
     try {
-      grant = await request('/tasks', { method: 'POST', token, signal, body: { title: title.slice(0, 120), max_usd: String(maxUsd), model, mode, method, idempotency_key: idempotencyKey } });
+      grant = await request('/tasks', { method: 'POST', token, signal, offer, body: { title: title.slice(0, 120), max_usd: String(maxUsd), model, mode, method, idempotency_key: idempotencyKey } });
       if (!grant?.id) throw new ServiceError('incomplete', 'Service returned a task without an id.');
     } catch (error) {
       // Even HTTP failures can be ambiguous. Only GET is allowed after dispatch.
+      if (lookupOnTimeoutOnly && error.code !== 'timeout') throw new ServiceError(error.code, `${error.message} Idempotency key: ${idempotencyKey}. No paid request was repeated; inspect this key before asking again.`, error.status);
       try {
-        const recovered = await request(`/tasks/by-idempotency/${encodeURIComponent(idempotencyKey)}`, { token });
+        const recovered = await request(`/tasks/by-idempotency/${encodeURIComponent(idempotencyKey)}`, { token, offer });
         if (!recovered?.id) throw new ServiceError('incomplete', 'Lookup returned no task id.');
         return answerOf(recovered.id, recovered, true);
       } catch {
@@ -190,16 +193,18 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
       }
     }
     try {
-      const response = await request(`/tasks/${encodeURIComponent(grant.id)}/chat`, { method: 'POST', token, signal, timeoutMs: chatTimeoutMs, body: { messages, max_tokens: maxTokens } });
+      const response = await request(`/tasks/${encodeURIComponent(grant.id)}/chat`, { method: 'POST', token, signal, offer, timeoutMs: chatTimeoutMs, body: { messages, max_tokens: maxTokens } });
       if (typeof response?.choices?.[0]?.message?.content !== 'string') throw new ServiceError('no_output', 'Service returned no assistant text.');
       return answerOf(grant.id, response);
     } catch (error) {
-      try { return answerOf(grant.id, await task(token, grant.id), true); }
+      if (lookupOnTimeoutOnly && error.code !== 'timeout') throw new ServiceError(error.code, `${error.message} Check task ${grant.id} with tvijo_task_status. No paid request was repeated.`, error.status);
+      try { return answerOf(grant.id, await task(token, grant.id, offer), true); }
       catch { throw new ServiceError(error.code, `${error.message} Check task ${grant.id} with tvijo_task_status. No paid request was repeated.`, error.status); }
     }
   }
 
   return {
+    setClientNameProvider: (provider) => { clientName = provider; },
     base: root, request, startDeviceLogin, pollDeviceOnce, pollDeviceLogin, ask, task,
     taskState: async (token, taskId) => taskStateOf(await task(token, taskId)),
     lookupGrant: (token, key) => request(`/tasks/by-idempotency/${encodeURIComponent(key)}`, { token }),

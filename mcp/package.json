@@ -1,7 +1,7 @@
 {
   "name": "tvijo-dshrem-mcp",
-  "version": "0.1.1",
-  "description": "Tvijo DSHREM tools over MCP stdio",
+  "version": "0.2.0",
+  "description": "Tvijo pre-merge diff review and cloud assistance with explicit spending limits",
   "mcpName": "com.tvijo/dshrem",
   "type": "module",
   "bin": {
@@ -15,7 +15,8 @@
     "server.json"
   ],
   "scripts": {
-    "test": "node --test"
+    "test": "node --test",
+    "readme:tools": "node scripts/readme-tools.mjs"
   },
   "engines": {
     "node": ">=20"

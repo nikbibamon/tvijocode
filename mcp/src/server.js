@@ -1,13 +1,14 @@
-import { readFileSync } from 'node:fs';
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createClient, ServiceError } from './client.js';
 import { createTokenStore } from './token-store.js';
 import { createLocalReports } from './local-reports.js';
+import { VERSION } from './client-tag.js';
+import { diffFiles, reviewMessages, reviewOutputSchema, reviewResult } from './review.js';
 
 // One source of truth: the publish workflow checks the tag against package.json.
-export const VERSION = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version;
+export { VERSION };
 const READ_ONLY = { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: true };
 const MUTATING = { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: true };
 
@@ -40,6 +41,7 @@ export function accountLabel(account) {
 
 export function createMcpServer({ env = process.env, client = createClient({ base: env.TVIJO_API_BASE }), store = createTokenStore({ env }), now = () => Date.now() } = {}) {
   const server = new McpServer({ name: 'tvijo-dshrem-mcp', version: VERSION });
+  client.setClientNameProvider?.(() => server.server.getClientVersion()?.name);
   const { add, redact } = createRedactor([env.TVIJO_TOKEN, env.TVIJO_TOKEN?.trim()]);
   let activeLogin;
   let polling = false;
@@ -80,6 +82,24 @@ export function createMcpServer({ env = process.env, client = createClient({ bas
     const cap = spendingCap(env);
     if (args.max_usd > cap) throw new ServiceError('spending_cap', `max_usd exceeds the configured cap of ${cap} USD (hard ceiling 5 USD). No request was sent.`);
     return json(await client.ask({ token: await token(), maxUsd: args.max_usd, messages: [{ role: 'user', content: args.prompt }], title: args.title, model: args.model, mode: args.mode, maxTokens: args.max_tokens, signal: extra?.signal }));
+  }));
+
+  server.registerTool('tvijo_review', {
+    description: 'Review a supplied pre-merge diff for evidenced findings. This spends real money up to max_usd; paid requests are never retried. Reviews cover only the supplied diff.',
+    inputSchema: {
+      diff: z.string().min(1).max(20000, 'diff_too_large: Diff exceeds 20,000 characters. Split by path; no request was sent.').describe('Unified diff, at most 20,000 characters; split larger diffs by path.'),
+      base_sha: z.string().regex(/^[a-fA-F0-9]{7,64}$/),
+      head_sha: z.string().regex(/^[a-fA-F0-9]{7,64}$/),
+      focus: z.string().max(500).optional(),
+      max_usd: z.number().positive()
+    }, outputSchema: reviewOutputSchema, annotations: MUTATING
+  }, guarded(async (args, extra) => {
+    if (args.diff.length > 20000) throw new ServiceError('diff_too_large', 'Diff exceeds 20,000 characters. Split by path and review each part separately. No request was sent.');
+    const cap = spendingCap(env);
+    if (args.max_usd > cap) throw new ServiceError('spending_cap', `max_usd exceeds the configured cap of ${cap} USD (hard ceiling 5 USD). No request was sent.`);
+    const reviewed = { base_sha: args.base_sha, head_sha: args.head_sha, files: diffFiles(args.diff), diff_chars: args.diff.length };
+    const result = await client.ask({ token: await token(), maxUsd: args.max_usd, title: `review ${args.head_sha.slice(0, 12)}`, messages: reviewMessages(args, reviewed), signal: extra?.signal, offer: 'review', lookupOnTimeoutOnly: true });
+    return json(reviewResult(result, reviewed));
   }));
 
   server.registerTool('tvijo_task_status', {
