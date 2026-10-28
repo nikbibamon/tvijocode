@@ -20,7 +20,7 @@ export async function fakeApi(t, handler) {
       const chunks = [];
       for await (const chunk of req) chunks.push(chunk);
       const raw = Buffer.concat(chunks).toString('utf8');
-      const request = { method: req.method, path: req.url, authorization: req.headers.authorization, body: raw ? JSON.parse(raw) : undefined };
+      const request = { method: req.method, path: req.url, authorization: req.headers.authorization, headers: req.headers, body: raw ? JSON.parse(raw) : undefined };
       requests.push(request);
       const result = await handler(request, requests);
       if (result?.action === 'timeout') return;

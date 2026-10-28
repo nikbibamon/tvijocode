@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "com.tvijo/dshrem",
   "title": "Tvijo DSHREM",
-  "description": "Ask Tvijo DSHREM with explicit spending limits and manage your account and tasks.",
-  "version": "0.1.1",
+  "description": "Pre-merge diff review and cloud assistance with explicit Tvijo spending limits.",
+  "version": "0.2.0",
   "websiteUrl": "https://dsh.tvijo.com",
   "icons": [
     {
@@ -23,7 +23,7 @@
     {
       "registryType": "npm",
       "identifier": "tvijo-dshrem-mcp",
-      "version": "0.1.1",
+      "version": "0.2.0",
       "transport": {
         "type": "stdio"
       },
