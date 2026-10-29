@@ -1,0 +1,67 @@
+name: Verify retained 1.140.07215 Windows ZIP
+
+on:
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  verify:
+    runs-on: windows-2022
+    env:
+      RELEASE_VERSION: '1.140.07215'
+      TVIJO_SOURCE_SHA: '6495423a8ca97724e9f447883947d9361430b207'
+      TVIJO_BUILD_RUN: '40859929335'
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020
+        with:
+          node-version-file: .nvmrc
+      - uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97
+        with:
+          python-version: '3.11'
+      - name: Check builder provenance and retained artifact
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          python3 - <<'PY'
+          import json,os,pathlib,subprocess
+          repo=os.environ['GITHUB_REPOSITORY'];run=os.environ['TVIJO_BUILD_RUN']
+          def api(path):
+              result=subprocess.run(['gh','api',f'repos/{repo}/actions/runs/{run}/{path}'],capture_output=True,text=True,check=True,timeout=60)
+              return json.loads(result.stdout)
+          meta=subprocess.run(['gh','api',f'repos/{repo}/actions/runs/{run}'],capture_output=True,text=True,check=True,timeout=60)
+          data=json.loads(meta.stdout);assert data['head_sha']==os.environ['TVIJO_SOURCE_SHA'] and data['status']=='completed' and data['event']=='workflow_dispatch'
+          jobs=api('jobs')['jobs'];matching=[x for x in jobs if x['name']=='build'];assert len(matching)==1
+          steps={x['name']:x['conclusion'] for x in matching[0]['steps']}
+          for name in ['Build','Embed Tvijo extensions','Prepare assets','Upload installers']:assert steps.get(name)=='success',(name,steps.get(name))
+          artifacts=api('artifacts')['artifacts'];matches=[x for x in artifacts if x['name']=='tvijocode-x64' and not x['expired']];assert len(matches)==1
+          out={'builder_run':int(run),'builder_source':data['head_sha'],'builder_job':matching[0]['id'],'artifact_id':matches[0]['id'],'steps':{x:steps[x] for x in ['Build','Embed Tvijo extensions','Prepare assets','Upload installers']}}
+          pathlib.Path(os.environ['RUNNER_TEMP'],'tvijo-zip-provenance.json').write_text(json.dumps(out,indent=2))
+          print(json.dumps(out))
+          PY
+      - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
+        with:
+          name: tvijocode-x64
+          run-id: 40859929335
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          path: assets
+      - name: Test exact retained ZIP
+        run: python3 tvijo/smoke_windows_zip.py
+      - name: Retain ZIP evidence
+        if: always() && env.TVIJO_ZIP_SMOKE_WORK != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tvijocode-windows-zip-evidence-${{ github.run_id }}
+          path: |
+            ${{ env.TVIJO_ZIP_SMOKE_WORK }}
+            ${{ runner.temp }}/tvijo-zip-provenance.json
+          retention-days: 90
