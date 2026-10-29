@@ -71,6 +71,11 @@ with (work/'extension-host.log').open('xb') as output:
         raise RuntimeError('Installed extension host timed out')
 assert code==0 and activation.is_file(), 'Installed extension activation failed'
 activated=json.loads(activation.read_text());assert activated['version']==lock['version'] and activated['active']
+# The extension test process may leave editor helpers running. Only stop binaries
+# from this test's freshly created installation before testing uninstallation.
+cleanup_env=dict(os.environ, TVIJO_INSTALL_ROOT=str(destination.resolve()) + os.sep)
+cleanup_script="Get-CimInstance Win32_Process | Where-Object { $_.ExecutablePath -and $_.ExecutablePath.StartsWith($env:TVIJO_INSTALL_ROOT, [System.StringComparison]::OrdinalIgnoreCase) } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction Stop }"
+subprocess.run(['powershell.exe','-NoProfile','-NonInteractive','-Command',cleanup_script],env=cleanup_env,check=True,timeout=60)
 uninstaller=destination/'unins000.exe';assert uninstaller.is_file(), 'Uninstaller missing'
 uninstall=subprocess.run([str(uninstaller),'/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART','/LOG='+str(work/'uninstall.log')],timeout=180)
 assert uninstall.returncode==0 and not binary.exists(), 'Uninstall lifecycle failed'
