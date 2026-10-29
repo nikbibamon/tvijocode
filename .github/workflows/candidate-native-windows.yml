@@ -1,0 +1,163 @@
+name: Candidate 1.140.07215 - Windows
+
+# Tvijo Code test phase: Windows x64 only, one job, manual dispatch.
+#
+# VSCodium splits compile and packaging into two jobs so several architectures
+# can share one compile; with x64 only that split ran `npm ci` twice (~10 min
+# each). Here the whole build runs once in VSCodium's own single-pass mode
+# (CI_BUILD=no in build.sh). Not built in this phase: MSI (VSCodium's WiX
+# carries VSCodium's UpgradeCode), REH, the system-wide installer and the
+# tunnel CLI (build_cli.sh points its self-update at VSCodium's releases).
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: tvijocode-windows-release
+  cancel-in-progress: false
+
+env:
+  APP_NAME: TvijoCode
+  RELEASE_VERSION: "1.140.07215"
+  ASSETS_REPOSITORY: ${{ github.repository }}
+  BINARY_NAME: tvijocode
+  DISABLE_MSI: "yes"
+  DISABLE_UPDATE: "yes"
+  GH_REPO_PATH: ${{ github.repository }}
+  GITHUB_BRANCH: ${{ github.ref_name }}
+  ORG_NAME: Tvijo
+  OS_NAME: windows
+  SHOULD_BUILD_CLI: "no"
+  SHOULD_BUILD_EXE_SYS: "no"
+  SHOULD_BUILD_REH: "no"
+  SHOULD_BUILD_REH_WEB: "no"
+  # check_tags.sh compares against the latest release and aborts when it is not
+  # a VS Code version (ours can be ext-*). "no" = always build, skip asset dedup.
+  SHOULD_DEPLOY: "no"
+  VSCODE_ARCH: x64
+  VSCODE_QUALITY: stable
+  # Existing releases and failed draft artifacts are retained for reconciliation.
+
+jobs:
+  build:
+    runs-on: windows-2022
+    permissions:
+      contents: read
+    defaults:
+      run:
+        shell: bash
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.sha }}
+          persist-credentials: false
+
+      - name: Record exact selected source
+        env:
+          EXPECTED_SOURCE_SHA: ${{ github.sha }}
+        run: |
+          SOURCE_SHA="$( git rev-parse HEAD )"
+          test "${SOURCE_SHA}" = "${EXPECTED_SOURCE_SHA}"
+          echo "TVIJO_SOURCE_SHA=${SOURCE_SHA}" >> "${GITHUB_ENV}"
+          echo "TMPDIR=${RUNNER_TEMP}" >> "${GITHUB_ENV}"
+          echo "TVIJO_SMOKE_RECEIPT=${RUNNER_TEMP}/tvijo-windows-smoke.json" >> "${GITHUB_ENV}"
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup Python 3
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Clone VSCode repo
+        run: ./get_repo.sh
+
+      - name: Refuse an existing release version before building
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./release.sh --preflight
+
+      - name: Check release preservation offline
+        env:
+          TVIJO_RELEASE_TEST_TMP: ${{ runner.temp }}
+        run: node --test tvijo/release-safety.test.mjs
+
+      - name: Check existing tags/releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./check_tags.sh
+
+      - name: Locate download caches
+        id: caches
+        run: |
+          echo "npm=$( npm config get cache )" >> "${GITHUB_OUTPUT}"
+          echo "electron=${LOCALAPPDATA}\\electron\\Cache" >> "${GITHUB_OUTPUT}"
+
+      # Keyed on the pinned VS Code commit and our patches: the same inputs
+      # resolve the same lockfiles, so npm and Electron come from the cache.
+      - name: Cache npm and Electron downloads
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ${{ steps.caches.outputs.npm }}
+            ${{ steps.caches.outputs.electron }}
+          key: tvijocode-win-x64-${{ hashFiles('upstream/stable.json', 'patches/**') }}
+          restore-keys: |
+            tvijocode-win-x64-
+
+      - name: Build
+        env:
+          CI_BUILD: "no"
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./build.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Embed Tvijo extensions
+        run: ./tvijo/embed_extensions.sh "VSCode-win32-${VSCODE_ARCH}"
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Prepare assets
+        run: ./prepare_assets.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Smoke test portable zip
+        run: ./tvijo/smoke_windows.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Test user installer lifecycle and installed extension
+        run: python3 tvijo/smoke_windows_installer.py
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Upload installers
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tvijocode-${{ env.VSCODE_ARCH }}
+          path: |
+            assets/*.exe
+            assets/*.zip
+          retention-days: 90
+        if: always() && env.SHOULD_BUILD == 'yes'
+
+      - name: Prepare checksums
+        # release.sh computes SHA-256 itself; no global npm dependency is needed.
+        run: echo "Checksums and source receipt are generated from the final assets during publication."
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Retain native smoke and publication evidence
+        if: always() && (env.TVIJO_SMOKE_WORK != '' || env.TVIJO_EMBED_WORK != '' || env.TVIJO_INSTALLER_SMOKE_WORK != '')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: tvijocode-windows-evidence-${{ github.run_id }}
+          path: |
+            ${{ env.TVIJO_SMOKE_WORK }}
+            ${{ env.TVIJO_EMBED_WORK }}
+            ${{ env.TVIJO_INSTALLER_SMOKE_WORK }}
+            ${{ env.TVIJO_SMOKE_RECEIPT }}
+            assets/BUILD_RECEIPT.json
+            assets/WINDOWS_SMOKE.json
+            ${{ runner.temp }}/tvijo-publish-*/publication.json
+          retention-days: 90
