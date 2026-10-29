@@ -17,6 +17,12 @@ This repository also hosts the **Tvijo DSHREM MCP server** in [`mcp/`](mcp/)
 
 ## Download
 
+The 1.140.07215 candidate pins Tvijo DSHREM 0.10.25. Its manual candidate
+workflows retain Windows, macOS and Linux artifacts and native smoke evidence;
+they do not publish releases. Each channel remains unavailable until its exact
+artifact passes its own native checks and is independently published. Linux
+package installers and macOS notarization are separate from desktop ZIP/TAR checks.
+
 Test builds are on [Releases](https://github.com/nikbibamon/tvijocode/releases).
 During the test phase only **Windows 10/11 x64** is built
 (`TvijoCodeUserSetup-x64-*.exe` installs without admin rights; the `.zip` is portable).

@@ -1,0 +1,105 @@
+name: Candidate 1.140.07215 - macOS
+
+# Tvijo Code: VSCodium's stable macOS pipeline without Apple notarization
+# (no developer certificate yet) and without the versions repo. The app is
+# ad-hoc signed so Apple Silicon runs it; Gatekeeper still warns on first open.
+
+on:
+  workflow_dispatch: {}
+
+env:
+  APP_NAME: TvijoCode
+  RELEASE_VERSION: "1.140.07215"
+  ASSETS_REPOSITORY: ${{ github.repository }}
+  BINARY_NAME: tvijocode
+  DISABLE_UPDATE: "yes"
+  GH_REPO_PATH: ${{ github.repository }}
+  GITHUB_BRANCH: ${{ github.sha }}
+  MAX_OLD_SPACE_SIZE: 12288
+  ORG_NAME: Tvijo
+  OS_NAME: osx
+  # See publish-stable-windows.yml: always build, skip release asset dedup.
+  SHOULD_DEPLOY: "no"
+  VSCODE_QUALITY: stable
+
+jobs:
+  build:
+    runs-on: ${{ matrix.runner }}
+    permissions:
+      contents: read
+    env:
+      VSCODE_ARCH: ${{ matrix.vscode_arch }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: macos-15-intel
+            vscode_arch: x64
+          - runner: macos-14
+            vscode_arch: arm64
+
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.GITHUB_BRANCH }}
+          persist-credentials: false
+
+      - name: Setup Node.js environment
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version-file: .nvmrc
+
+      - name: Setup Python 3
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97 # v7.0.0
+        with:
+          python-version: "3.11"
+
+      - name: Clone VSCode repo
+        run: . get_repo.sh
+
+      - name: Check existing tags/releases
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: . check_tags.sh
+
+      - name: Build
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: ./build.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Embed Tvijo extensions
+        run: |
+          brew list jq >/dev/null 2>&1 || brew install jq
+          ./tvijo/embed_extensions.sh "VSCode-darwin-${VSCODE_ARCH}"
+          # Changing the bundle breaks Electron's signature; arm64 refuses to
+          # launch an unsigned binary, an ad-hoc signature is enough to run.
+          codesign --force --deep --sign - "VSCode-darwin-${VSCODE_ARCH}/Tvijo Code.app"
+          codesign --verify --deep "VSCode-darwin-${VSCODE_ARCH}/Tvijo Code.app"
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Prepare assets
+        run: ./prepare_assets.sh
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Test exact macOS archive
+        env:
+          TVIJO_SOURCE_SHA: ${{ github.sha }}
+        run: python3 tvijo/smoke_unix_candidate.py macos "assets/TvijoCode-darwin-${VSCODE_ARCH}-${RELEASE_VERSION}.zip"
+        if: env.SHOULD_BUILD == 'yes'
+
+      - name: Retain candidate archives
+        if: always() && env.SHOULD_BUILD == 'yes'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tvijocode-macos-${{ matrix.vscode_arch }}-${{ github.run_id }}
+          path: assets/*
+          retention-days: 90
+
+      - name: Retain native smoke evidence
+        if: always() && env.TVIJO_NATIVE_SMOKE_WORK != ''
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a
+        with:
+          name: tvijocode-macos-evidence-${{ matrix.vscode_arch }}-${{ github.run_id }}
+          path: ${{ env.TVIJO_NATIVE_SMOKE_WORK }}
+          retention-days: 90
