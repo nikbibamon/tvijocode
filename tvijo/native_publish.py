@@ -23,7 +23,8 @@ import zipfile
 REPO='nikbibamon/tvijocode'
 VERSION='1.140.07215'
 BUILDER='6495423a8ca97724e9f447883947d9361430b207'
-ZIP_VERIFIER='65e282b4334d9809d355fed14bb50232e0d7708d'
+ZIP_VERIFIER='6e8bfbfca245948c2a5569a305527c1973ef9951'
+INSTALLER_VERIFIER='bddbff3be9ebf5e2f0208f0ac167cfab908abe80'
 EXT_SHA='453d1fa8d6753de5009fdaec2d6d956b80aac678a4cff670b3d124d9d2a355ba'
 RUNS={'windows-exe':40859929335,'windows-zip':40859929335,'macos-arm64':40859932911,'macos-x64':40859932911,'linux-tar':40859936491}
 JOBS={'windows-exe':'build','macos-arm64':'build (macos-14, arm64)','macos-x64':'build (macos-15-intel, x64)','linux-tar':'smoke'}
@@ -73,11 +74,13 @@ def validate_receipt(kind,artifact,receipt,builder,verifier=None,provenance=None
     if receipt.get('artifact')!=artifact.name or receipt.get('artifact_sha256')!=digest:raise ValueError('receipt does not bind artifact bytes')
     active=receipt.get('activation')
     if not isinstance(active,dict) or active.get('active') is not True or active.get('guide') is not True or active.get('write') is not True or active.get('commandExit')!=0:raise ValueError('native activation behavior missing')
-    if kind=='windows-zip':
-        if not verifier or verifier.get('headSha')!=ZIP_VERIFIER or verifier.get('status')!='completed' or verifier.get('conclusion')!='success' or not job_passed(verifier,'verify'):raise ValueError('ZIP verifier did not pass')
-        if receipt.get('source_commit')!=BUILDER or receipt.get('verifier_commit')!=ZIP_VERIFIER:raise ValueError('ZIP receipt source mismatch')
+    if kind=='windows-zip' or (kind=='windows-exe' and verifier):
+        verifier_sha=ZIP_VERIFIER if kind=='windows-zip' else INSTALLER_VERIFIER
+        if not verifier or verifier.get('headSha')!=verifier_sha or verifier.get('status')!='completed' or verifier.get('conclusion')!='success' or not job_passed(verifier,'verify'):raise ValueError('Windows verifier did not pass')
+        if kind=='windows-zip' and (receipt.get('source_commit')!=BUILDER or receipt.get('verifier_commit')!=ZIP_VERIFIER):raise ValueError('ZIP receipt source mismatch')
         if not provenance or provenance.get('builder_run')!=RUNS[kind] or provenance.get('builder_source')!=BUILDER:raise ValueError('ZIP builder provenance missing')
         if any(provenance.get('steps',{}).get(x)!='success' for x in ('Build','Embed Tvijo extensions','Prepare assets','Upload installers')):raise ValueError('ZIP builder stages did not pass')
+        if kind=='windows-exe' and (receipt.get('installer_exit')!=0 or receipt.get('uninstaller_exit')!=0):raise ValueError('installer lifecycle incomplete')
     else:
         if not job_passed(builder,JOBS[kind]):raise ValueError('native job did not pass')
         if kind=='windows-exe':
@@ -115,10 +118,11 @@ def main():
     for entry in entries:
         kind=entry['kind'];artifact=safe_file(entry['artifact']);receipt_file=safe_file(entry['receipt']);receipt=json.loads(receipt_file.read_text());builder=run_info(RUNS[kind])
         verifier=None;provenance=None;receipt_run=RUNS[kind];receipt_head=BUILDER
-        if kind=='windows-zip':
-            receipt_run=int(entry['verifier_run']);verifier=run_info(receipt_run);receipt_head=ZIP_VERIFIER
+        if kind=='windows-zip' or (kind=='windows-exe' and 'verifier_run' in entry):
+            receipt_run=int(entry['verifier_run']);verifier=run_info(receipt_run);receipt_head=ZIP_VERIFIER if kind=='windows-zip' else INSTALLER_VERIFIER
             provenance_file=safe_file(entry['provenance']);provenance=json.loads(provenance_file.read_text())
-            bundle_member(entry['receipt_bundle'],'tvijo-zip-provenance.json',sha(provenance_file),entry['receipt_bundle_id'],receipt_run,receipt_head)
+            provenance_name='tvijo-zip-provenance.json' if kind=='windows-zip' else 'tvijo-installer-provenance.json'
+            bundle_member(entry['receipt_bundle'],provenance_name,sha(provenance_file),entry['receipt_bundle_id'],receipt_run,receipt_head)
         result=validate_receipt(kind,artifact,receipt,builder,verifier,provenance)
         bundle_member(entry['asset_bundle'],artifact.name,result['sha256'],entry['asset_bundle_id'],RUNS[kind],BUILDER)
         bundle_member(entry['receipt_bundle'],receipt_file.name,sha(receipt_file),entry['receipt_bundle_id'],receipt_run,receipt_head)

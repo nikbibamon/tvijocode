@@ -14,6 +14,7 @@ jobs:
       RELEASE_VERSION: '1.140.07215'
       TVIJO_SOURCE_SHA: '6495423a8ca97724e9f447883947d9361430b207'
       TVIJO_BUILD_RUN: '40859929335'
+      PYTHONUTF8: '1'
     defaults:
       run:
         shell: bash
