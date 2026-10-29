@@ -42,6 +42,18 @@ class NativePublicationGuards(unittest.TestCase):
         r=copy.deepcopy(self.receipt);r.update(artifact=artifact.name,artifact_sha256=hashlib.sha256(artifact.read_bytes()).hexdigest())
         with self.assertRaises(ValueError):m.validate_receipt('windows-zip',artifact,r,self.run)
 
+    def test_independent_installer_verifier_requires_source_steps_and_lifecycle(self):
+        builder=copy.deepcopy(self.run);builder['jobs'][0]['conclusion']='failure'
+        verifier={'headSha':m.INSTALLER_VERIFIER,'status':'completed','conclusion':'success','jobs':[{'name':'verify','status':'completed','conclusion':'success'}]}
+        provenance={'builder_run':m.RUNS['windows-exe'],'builder_source':m.BUILDER,'steps':{x:'success' for x in ('Build','Embed Tvijo extensions','Prepare assets','Upload installers')}}
+        self.assertEqual(m.validate_receipt('windows-exe',self.artifact,self.receipt,builder,verifier,provenance)['sha256'],self.digest)
+        for field in ('head','step','uninstall'):
+            v,p,r=copy.deepcopy(verifier),copy.deepcopy(provenance),copy.deepcopy(self.receipt)
+            if field=='head':v['headSha']='0'*40
+            if field=='step':p['steps']['Upload installers']='failure'
+            if field=='uninstall':r['uninstaller_exit']=1
+            with self.subTest(field=field),self.assertRaises(ValueError):m.validate_receipt('windows-exe',self.artifact,r,builder,v,p)
+
     def test_authenticated_bundle_must_match_remote_digest_and_member(self):
         bundle=self.root/'bundle.zip'
         with zipfile.ZipFile(bundle,'x') as z:z.write(self.artifact,'assets/'+self.artifact.name)
