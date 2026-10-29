@@ -139,9 +139,9 @@ def main():
     if api(api_root+'/releases/tags/'+VERSION,optional=True) is not None or api(api_root+'/git/ref/tags/'+VERSION,optional=True) is not None:raise ValueError('version already exists; preserve it')
     expected={p.name:{'sha256':sha(p),'bytes':p.stat().st_size} for p in upload}
     notes='Tvijo Code '+VERSION+' preview. Published channels: '+', '.join(kinds)+'. Each included artifact passed its own native smoke.\n\n'
-    notes+='Extension 0.10.25 is embedded. Interactive sign-in and live paid-model tasks are unverified. macOS notarization is not claimed; Linux package installers are not covered by the desktop tar test. Existing releases are preserved.\n'
+    notes+='Extension 0.10.25 is embedded. Interactive sign-in and live paid-model tasks are unverified. macOS notarization and Windows publisher signing trust are not verified; Linux package installers are not covered by the desktop tar test. Existing releases are preserved.\n'
     notes+='\nРусский: предварительная версия Tvijo Code '+VERSION+'. Опубликованные варианты: '+', '.join(kinds)+'. Каждый включённый файл прошёл собственную проверку на соответствующей платформе.\n\n'
-    notes+='Встроено расширение 0.10.25. Интерактивный вход и реальные задачи с платными моделями не проверялись. Нотаризация macOS не заявляется; проверка Linux tar не распространяется на пакетные установщики. Предыдущие релизы сохранены.\n'
+    notes+='Встроено расширение 0.10.25. Интерактивный вход и реальные задачи с платными моделями не проверялись. Нотаризация macOS и доверие к подписи издателя Windows не подтверждены; проверка Linux tar не распространяется на пакетные установщики. Предыдущие релизы сохранены.\n'
     tag=gh('api','--method','POST',api_root+'/git/refs','-f','ref=refs/tags/'+VERSION,'-f','sha='+BUILDER)
     if tag.returncode:raise ValueError('fresh tag reservation failed; inspect remote state')
     write_new(args.out/'tag-created.json',tag.stdout.encode())
