@@ -17,20 +17,23 @@ This repository also hosts the **Tvijo DSHREM MCP server** in [`mcp/`](mcp/)
 
 ## Download
 
-The 1.140.07215 candidate pins Tvijo DSHREM 0.10.25. Its manual candidate
-workflows retain Windows, macOS and Linux artifacts and native smoke evidence;
-they do not publish releases. Each channel remains unavailable until its exact
-artifact passes its own native checks and is independently published. Linux
-package installers and macOS notarization are separate from desktop ZIP/TAR checks.
+[Preview 1.140.07215](https://github.com/nikbibamon/tvijocode/releases/tag/1.140.07215)
+embeds Tvijo DSHREM 0.10.25. It includes a portable Windows x64 ZIP and per-user
+EXE installer, macOS ZIPs for Apple silicon and Intel, and a Linux x64 desktop
+TAR. Each published file has a SHA-256 and an individual native smoke receipt;
+the Windows EXE was also installed and uninstalled in Windows CI.
 
-Test builds are on [Releases](https://github.com/nikbibamon/tvijocode/releases).
-During the test phase only **Windows 10/11 x64** is built
-(`TvijoCodeUserSetup-x64-*.exe` installs without admin rights; the `.zip` is portable).
-macOS and Linux builds follow after a series of passing Windows tests; their
-workflows are kept in `.github/workflows/` but disabled.
+The macOS builds use ad-hoc signatures and are not verified as notarized. Windows
+publisher signing trust, interactive sign-in and paid-model tasks were not
+verified. Linux DEB/RPM installers and the standalone CLI are not included in
+this preview. Previous releases remain available.
 
-Builds are **not code-signed yet**: SmartScreen shows "unknown publisher" on first
-run (More info → Run anyway).
+**Русский:** [предварительный выпуск 1.140.07215](https://github.com/nikbibamon/tvijocode/releases/tag/1.140.07215)
+содержит Windows ZIP и EXE, macOS для Apple silicon и Intel и Linux x64 TAR со
+встроенным Tvijo DSHREM 0.10.25. Для каждого файла опубликованы SHA-256 и отчёт
+нативной проверки. Нотаризация macOS и доверие к подписи издателя Windows не
+подтверждены; вход и задачи с платными моделями не проверялись. Пакетные
+установщики Linux и отдельный CLI в этот выпуск не входят.
 
 ## When it does NOT work
 
