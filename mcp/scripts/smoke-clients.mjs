@@ -10,6 +10,7 @@ import { StdioClientTransport } from '@modelcontextprotocol/sdk/client/stdio.js'
 
 const cwd = process.argv[2];
 assert.ok(cwd, 'Pass the directory containing the installed tarball package');
+const { version } = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'));
 const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 const section = (name) => readme.split(`## ${name}\n`)[1].split('\n## ')[0];
 const json = (name) => JSON.parse(section(name).match(/```json\n([\s\S]*?)\n```/)[1]);
@@ -32,13 +33,13 @@ for (const [name, config] of Object.entries(configs)) {
   try {
     await client.connect(transport);
     const tools = (await client.listTools()).tools;
-    assert.equal(client.getServerVersion().version, '0.2.0');
-    assert.equal(tools.length, 7);
+    assert.equal(client.getServerVersion().version, version);
+    assert.equal(tools.length, 11);
     assert.ok(tools.some((tool) => tool.name === 'tvijo_review'));
     const account = await client.callTool({ name: 'tvijo_account', arguments: {} });
     assert.equal(account.isError, true);
     assert.match(account.content[0].text, /unauthorized/);
     assert.equal(stderr, '');
-    process.stdout.write(`${name}: initialize=0.2.0, tools=7, unsigned account=unauthorized, stderr=empty\n`);
+    process.stdout.write(`${name}: initialize=${version}, tools=${tools.length}, unsigned account=unauthorized, stderr=empty\n`);
   } finally { await client.close(); }
 }

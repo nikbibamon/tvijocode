@@ -1,6 +1,6 @@
 {
   "name": "tvijo-dshrem-mcp",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Tvijo pre-merge diff review and cloud assistance with explicit spending limits",
   "mcpName": "com.tvijo/dshrem",
   "type": "module",
@@ -12,7 +12,8 @@
     "src",
     "README.md",
     "LICENSE",
-    "server.json"
+    "server.json",
+    "CHANGELOG.md"
   ],
   "scripts": {
     "test": "node --test",

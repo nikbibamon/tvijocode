@@ -8,7 +8,7 @@ const manifest = JSON.parse(await readFile(new URL('../server.json', import.meta
 
 test('README generated table equals registered tools/list exactly', async () => {
   const tools = await registeredTools();
-  assert.equal(tools.length, 7);
+  assert.equal(tools.length, 11);
   assert.equal(readme, replaceTable(readme, toolTable(tools)), 'Run npm run readme:tools');
 });
 
