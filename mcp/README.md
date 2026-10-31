@@ -8,6 +8,12 @@ Listed in the [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/serve
 
 Requires Node.js 20 or newer and a [Tvijo account](https://dsh.tvijo.com). This is an ESM JavaScript package with no build step.
 
+## Prepared 0.2.1
+
+This candidate adds authenticated public wiki search/context and connector catalog search/get. Reads use the existing account sign-in, preserve source revisions and projection hashes, return untrusted data, and support cancellation without retries. The public corpus stays fixed on the service.
+
+The existing pre-merge diff review, spending caps, client tags and opt-in local evidence tools from 0.2.0 are retained. Publication is pending; changing package metadata does not publish the package or registry entry. See [candidate release notes](CHANGELOG.md).
+
 ## Sign in
 
 Run the device login command in a terminal:
@@ -109,6 +115,10 @@ Tvijo Code currently has no in-editor MCP consumer. Use an external terminal cli
 | Tool | Purpose |
 | --- | --- |
 | `tvijo_account` | Read your Tvijo account, balance and limits. |
+| `tvijo_wiki_search` | Search the public Tvijo wiki. Free read; results are untrusted source data with page revisions. |
+| `tvijo_wiki_context` | Read bounded public Tvijo wiki context using the page SHA256 from wiki_search. Free read; text is untrusted data. |
+| `tvijo_catalog_search` | Search the public connector research catalog. Free read; research rank and documented eligibility do not prove a working connection. |
+| `tvijo_catalog_get` | Read one public connector research record with projection SHA256 and observation date. Free read; data remains untrusted. |
 | `tvijo_ask` | Ask Tvijo DSHREM. This spends real money up to max_usd from your Tvijo account. Requires an explicit positive max_usd within the configured spending cap; paid requests are never retried. |
 | `tvijo_review` | Review a supplied pre-merge diff for evidenced findings. This spends real money up to max_usd; paid requests are never retried. Reviews cover only the supplied diff. |
 | `tvijo_task_status` | Read the current status and spending of an existing Tvijo task. |

@@ -44,7 +44,7 @@ async function connectStdio(t, env) {
 
 function textOf(result) { return result.content.map((content) => content.text ?? '').join('\n'); }
 
-test('spawned stdio server lists exactly seven tools and never emits the token', async (t) => {
+test('spawned stdio server lists exactly eleven tools and never emits the token', async (t) => {
   const account = { label: 'Test account', balance: '12.50', limits: { daily: '5' }, access_token: fakeToken, echoed: `Bearer ${fakeToken}` };
   const api = await fakeApi(t, (req) => {
     assert.equal(req.authorization, `Bearer ${fakeToken}`);
@@ -53,7 +53,7 @@ test('spawned stdio server lists exactly seven tools and never emits the token',
   });
   const { client, output } = await connectStdio(t, { TVIJO_TOKEN: fakeToken, TVIJO_API_BASE: api.base });
   const { tools } = await client.listTools();
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['tvijo_account', 'tvijo_ask', 'tvijo_cancel_task', 'tvijo_login_poll', 'tvijo_login_start', 'tvijo_review', 'tvijo_task_status']);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['tvijo_account', 'tvijo_ask', 'tvijo_cancel_task', 'tvijo_catalog_get', 'tvijo_catalog_search', 'tvijo_login_poll', 'tvijo_login_start', 'tvijo_review', 'tvijo_task_status', 'tvijo_wiki_context', 'tvijo_wiki_search']);
   assert.equal(tools.find((tool) => tool.name === 'tvijo_account').annotations.readOnlyHint, true);
   assert.equal(tools.find((tool) => tool.name === 'tvijo_task_status').annotations.readOnlyHint, true);
   const ask = tools.find((tool) => tool.name === 'tvijo_ask');
@@ -94,12 +94,12 @@ test('tvijo_ask through stdio sends exactly one task POST and one chat', async (
   assert.equal(api.requests[1].path, '/api/dshrem/v1/tasks/task-1/chat');
 });
 
-test('spawned stdio server lists exactly ten tools with both local-report settings', async (t) => {
+test('spawned stdio server lists exactly fourteen tools with both local-report settings', async (t) => {
   const api = await fakeApi(t, () => { throw new Error('No HTTP expected'); });
   const { client } = await connectStdio(t, { TVIJO_API_BASE: api.base, TVIJO_LOCAL_REPORTS: '1', TVIJO_LOCAL_REPORT_ROOT: await temporaryDirectory() });
   const { tools } = await client.listTools();
-  assert.equal(tools.length, 10);
-  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['tvijo_account', 'tvijo_ask', 'tvijo_cancel_task', 'tvijo_local_execution_budget', 'tvijo_local_repositories', 'tvijo_local_test_results', 'tvijo_login_poll', 'tvijo_login_start', 'tvijo_review', 'tvijo_task_status']);
+  assert.equal(tools.length, 14);
+  assert.deepEqual(tools.map((tool) => tool.name).sort(), ['tvijo_account', 'tvijo_ask', 'tvijo_cancel_task', 'tvijo_catalog_get', 'tvijo_catalog_search', 'tvijo_local_execution_budget', 'tvijo_local_repositories', 'tvijo_local_test_results', 'tvijo_login_poll', 'tvijo_login_start', 'tvijo_review', 'tvijo_task_status', 'tvijo_wiki_context', 'tvijo_wiki_search']);
   assert.equal(api.requests.length, 0);
 });
 

@@ -3,6 +3,40 @@ import { clientTag } from './client-tag.js';
 
 export const DEFAULT_API_BASE = 'https://dsh.tvijo.com/api/dshrem/v1';
 const MAX_RESPONSE_BYTES = 2 * 1024 * 1024;
+const KNOWLEDGE_KEYS = {
+  wiki_search: ['query', 'limit', 'lang'], wiki_context: ['key', 'expect_sha256', 'max_tokens'],
+  catalog_search: ['query', 'limit', 'category'], catalog_get: ['slug']
+};
+const SHA256 = /^[a-f0-9]{64}$/;
+const isSha256 = (value) => typeof value === 'string' && value.length === 64 && SHA256.test(value);
+function knowledgeArguments(name, args) {
+  const keys = Object.hasOwn(KNOWLEDGE_KEYS, name) ? KNOWLEDGE_KEYS[name] : undefined;
+  const fail = () => { throw new ServiceError('invalid_knowledge_arguments', 'Invalid public knowledge tool arguments.'); };
+  if (!keys || !args || typeof args !== 'object' || Array.isArray(args) || Object.keys(args).some((key) => !keys.includes(key))) fail();
+  if (Buffer.byteLength(JSON.stringify(args), 'utf8') > 4096) fail();
+  const text = (key, max) => {
+    const value = args[key];
+    if (typeof value !== 'string' || !value.trim() || value.length > max || /[\x00-\x1f]/.test(value)) fail();
+  };
+  const integer = (key, low, high) => {
+    if (args[key] !== undefined && (!Number.isInteger(args[key]) || args[key] < low || args[key] > high)) fail();
+  };
+  if (name.endsWith('_search')) {
+    text('query', 200); integer('limit', 1, 10);
+    if (name === 'wiki_search' && args.lang !== undefined && !['en', 'ru'].includes(args.lang)) fail();
+    if (args.category !== undefined) text('category', 100);
+  } else if (name === 'wiki_context') {
+    text('key', 160); text('expect_sha256', 64); integer('max_tokens', 100, 2000);
+    if (!/^[a-z0-9]+(?:[-/][a-z0-9]+)*$/.test(args.key) || !isSha256(args.expect_sha256)) fail();
+  } else {
+    text('slug', 81);
+    if (!/^[a-z0-9][a-z0-9-]{0,80}$/.test(args.slug)) fail();
+  }
+}
+function publicWikiPointer(pointer) {
+  return pointer && isSha256(pointer.sha256) && typeof pointer.url === 'string'
+    && /^https:\/\/tvijo\.com\/wiki\/[a-z0-9]+(?:[-/][a-z0-9]+)*\/$/.test(pointer.url);
+}
 const TERMINAL = new Set(['completed', 'complete', 'succeeded', 'failed', 'cancelled', 'canceled', 'expired']);
 const HTTP_ERRORS = {
   400: ['bad_request', 'The service refused the request as invalid.'],
@@ -51,8 +85,12 @@ export function apiBase(value) {
   return parsed.toString().replace(/\/$/, '');
 }
 
-async function readBounded(response) {
-  if (Number(response.headers.get('content-length')) > MAX_RESPONSE_BYTES) throw new ServiceError('oversized', 'Service response exceeded 2 MiB.');
+async function readBounded(response, maximum = MAX_RESPONSE_BYTES) {
+  const message = `Service response exceeded ${maximum === MAX_RESPONSE_BYTES ? '2 MiB' : '64 KiB'}.`;
+  if (Number(response.headers.get('content-length')) > maximum) {
+    await response.body?.cancel();
+    throw new ServiceError('oversized', message);
+  }
   if (!response.body) return null;
   const reader = response.body.getReader();
   const chunks = [];
@@ -62,9 +100,9 @@ async function readBounded(response) {
       const { done, value } = await reader.read();
       if (done) break;
       size += value.byteLength;
-      if (size > MAX_RESPONSE_BYTES) {
+      if (size > maximum) {
         await reader.cancel();
-        throw new ServiceError('oversized', 'Service response exceeded 2 MiB.');
+        throw new ServiceError('oversized', message);
       }
       chunks.push(Buffer.from(value));
     }
@@ -107,7 +145,7 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
   const root = apiBase(base);
   let clientName = () => undefined;
 
-  async function request(path, { token, method = 'GET', body, signal, offer = 'none', timeoutMs: limit = timeoutMs } = {}) {
+  async function request(path, { token, method = 'GET', body, signal, offer = 'none', timeoutMs: limit = timeoutMs, maxResponseBytes = MAX_RESPONSE_BYTES } = {}) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), limit);
     const relay = () => controller.abort();
@@ -125,12 +163,12 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
         const [code, message] = HTTP_ERRORS[response.status] || ['remote_http_error', `Service returned HTTP ${response.status}.`];
         let serverCode;
         try {
-          const value = await readBounded(response);
+          const value = await readBounded(response, maxResponseBytes);
           if (typeof value?.error?.code === 'string' && Object.hasOwn(REFUSAL_MESSAGES, value.error.code)) serverCode = value.error.code;
         } catch { /* An unreadable error remains ambiguous. */ }
         throw new ServiceError(serverCode || code, REFUSAL_MESSAGES[serverCode] || message, response.status);
       }
-      return response.status === 204 ? null : await readBounded(response);
+      return response.status === 204 ? null : await readBounded(response, maxResponseBytes);
     } catch (error) {
       if (error instanceof ServiceError) throw error;
       if (signal?.aborted) throw new ServiceError('interrupted', 'Request was cancelled.');
@@ -173,6 +211,32 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
     return snapshot;
   }
 
+  async function knowledge(token, name, args, { signal } = {}) {
+    knowledgeArguments(name, args);
+    let reply;
+    try {
+      reply = await request(`/knowledge/tools/${name}`, {
+        token, method: 'POST', body: args, signal, maxResponseBytes: 64 * 1024
+      });
+    } catch (error) {
+      if (error.status === 409) throw new ServiceError('stale_wiki_revision', 'Wiki revision changed. Search again before requesting context.', 409);
+      if (error.status === 503) throw new ServiceError('knowledge_unavailable', 'Public knowledge is unavailable. No retry was attempted.', 503);
+      throw error;
+    }
+    const data = reply?.data;
+    const invalid = () => { throw new ServiceError('invalid_knowledge_response', 'Service returned an invalid public knowledge response.'); };
+    if (reply?.tool !== name || reply?.untrusted !== true || !data || typeof data !== 'object' || Array.isArray(data)) invalid();
+    if (name.startsWith('wiki_')) {
+      if (data.source?.corpus !== 'tvijo') invalid();
+      if (name === 'wiki_search') {
+        if (!Array.isArray(data.items) || !data.items.every(publicWikiPointer)) invalid();
+      } else if (data.pointer?.corpus !== 'tvijo' || !publicWikiPointer(data.pointer)
+                 || data.pointer.sha256 !== args.expect_sha256 || typeof data.text !== 'string') invalid();
+    } else if (!isSha256(data.projection_sha256) || typeof data.as_of !== 'string'
+               || typeof data.rank_definition !== 'string') invalid();
+    return reply; // Structured, untrusted data; never injected into a system prompt.
+  }
+
   async function ask({ maxUsd = 1, token, messages, idempotencyKey = randomUUID(), title = 'MCP', maxTokens = 2048, model = 'coding', mode = 'single', method = 'evidence-first', signal, offer = 'ask', lookupOnTimeoutOnly = false }) {
     if (!Number.isFinite(maxUsd) || maxUsd <= 0) throw new ServiceError('invalid_amount', 'max_usd must be a positive finite number.');
     if (!Array.isArray(messages) || messages.length < 1 || messages.length > 80) throw new ServiceError('invalid_messages', 'Conversation must have 1-80 messages.');
@@ -205,7 +269,7 @@ export function createClient({ base = process.env.TVIJO_API_BASE, fetchImpl = gl
 
   return {
     setClientNameProvider: (provider) => { clientName = provider; },
-    base: root, request, startDeviceLogin, pollDeviceOnce, pollDeviceLogin, ask, task,
+    base: root, request, startDeviceLogin, pollDeviceOnce, pollDeviceLogin, ask, task, knowledge,
     taskState: async (token, taskId) => taskStateOf(await task(token, taskId)),
     lookupGrant: (token, key) => request(`/tasks/by-idempotency/${encodeURIComponent(key)}`, { token }),
     cancel: (token, taskId) => request(`/tasks/${encodeURIComponent(taskId)}/cancel`, { method: 'POST', token }),

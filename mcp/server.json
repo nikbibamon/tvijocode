@@ -3,7 +3,7 @@
   "name": "com.tvijo/dshrem",
   "title": "Tvijo DSHREM",
   "description": "Pre-merge diff review and cloud assistance with explicit Tvijo spending limits.",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "websiteUrl": "https://dsh.tvijo.com",
   "icons": [
     {
@@ -23,7 +23,7 @@
     {
       "registryType": "npm",
       "identifier": "tvijo-dshrem-mcp",
-      "version": "0.2.0",
+      "version": "0.2.1",
       "transport": {
         "type": "stdio"
       },
