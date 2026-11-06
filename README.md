@@ -3,11 +3,11 @@
 Tvijo Code is a code editor built from the open-source VS Code sources (Code - OSS),
 with the [Tvijo DSHREM](https://dsh.tvijo.com) extension built in.
 
-> **A funded Tvijo account is required for paid MCP tasks.** The MIT-licensed
-> `tvijo-dshrem-mcp` client is free to install, but `tvijo_ask` and `tvijo_review`
-> spend real money from your Tvijo balance or credits, up to the explicit
-> per-call `max_usd`. Read-only tools require a signed-in Tvijo account and spend
-> nothing.
+> **A paid Tvijo account with sufficient balance or credits is required for paid MCP tasks.**
+> The MIT-licensed `tvijo-dshrem-mcp` client is free to install, but `tvijo_ask`
+> and `tvijo_review` spend real money from your Tvijo balance or credits, up to
+> the explicit per-call `max_usd`. Read-only tools require a signed-in Tvijo
+> account and are free.
 
 It is built by this repository's GitHub Actions from the official `microsoft/vscode` tag,
 using the [VSCodium](https://github.com/VSCodium/vscodium) build scripts:
@@ -102,9 +102,10 @@ terminal clients and the native Windows variants are documented in
 
 ### Ownership and support
 
+Publisher and namespace operator: **Tvijo, an independently operated project
+maintained by Nik Bibamon** ([`@nikbibamon`](https://github.com/nikbibamon)).
 The MCP Registry record publishes this server as `com.tvijo/dshrem` under the
-DNS-verified `tvijo.com` namespace. The project identity is **Tvijo, maintained by Nik Bibamon**
-([`@nikbibamon`](https://github.com/nikbibamon)).
+DNS-verified `tvijo.com` namespace.
 
 - Issues and feature requests: <https://github.com/nikbibamon/tvijocode/issues>
 - Official support: [admin@tvijo.com](mailto:admin@tvijo.com)

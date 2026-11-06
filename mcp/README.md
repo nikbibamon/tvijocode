@@ -8,11 +8,11 @@ Listed in the [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/serve
 
 Requires Node.js 20 or newer and a [Tvijo account](https://dsh.tvijo.com). This is an ESM JavaScript package with no build step.
 
-**A funded Tvijo account is required for paid tools.** This MIT-licensed client
-is free to install, but `tvijo_ask` and `tvijo_review` spend real money from your
-Tvijo balance or credits, up to the `max_usd` you supply. Read-only tools, and
-the public wiki and catalog reads, need a signed-in Tvijo account but spend
-nothing.
+**A paid Tvijo account with sufficient balance or credits is required for paid MCP tasks.**
+This MIT-licensed client is free to install, but `tvijo_ask` and `tvijo_review`
+spend real money from your Tvijo balance or credits, up to the `max_usd` you
+supply. Read-only tools and public wiki/catalog reads require a signed-in Tvijo
+account and are free.
 
 ## Version 0.2.1
 
@@ -208,9 +208,10 @@ Stdout carries MCP messages only. Terminal login instructions and CLI errors go 
 
 ## Ownership and support
 
+Publisher and namespace operator: **Tvijo, an independently operated project
+maintained by Nik Bibamon** ([`@nikbibamon`](https://github.com/nikbibamon)).
 The MCP Registry record publishes this server as `com.tvijo/dshrem` under the
-DNS-verified `tvijo.com` namespace. The project identity is **Tvijo, maintained by Nik Bibamon**
-([`@nikbibamon`](https://github.com/nikbibamon)).
+DNS-verified `tvijo.com` namespace.
 
 - Issues and feature requests: <https://github.com/nikbibamon/tvijocode/issues>
 - Official support: [admin@tvijo.com](mailto:admin@tvijo.com)
