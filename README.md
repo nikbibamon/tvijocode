@@ -3,6 +3,12 @@
 Tvijo Code is a code editor built from the open-source VS Code sources (Code - OSS),
 with the [Tvijo DSHREM](https://dsh.tvijo.com) extension built in.
 
+> **A paid Tvijo account is required.** The Tvijo DSHREM MCP server hosted in
+> [`mcp/`](mcp/) spends real money when you call its paid tools (`tvijo_ask`,
+> `tvijo_review`), up to the explicit per-call `max_usd`. Those calls draw on your
+> Tvijo balance or credits, so the account must be funded. Read-only tools need a
+> signed-in account and spend nothing.
+
 It is built by this repository's GitHub Actions from the official `microsoft/vscode` tag,
 using the [VSCodium](https://github.com/VSCodium/vscodium) build scripts:
 
@@ -13,7 +19,101 @@ using the [VSCodium](https://github.com/VSCodium/vscodium) build scripts:
   ([`tvijo/extensions.lock.json`](tvijo/extensions.lock.json)).
 
 This repository also hosts the **Tvijo DSHREM MCP server** in [`mcp/`](mcp/)
-(`npm i -g tvijo-dshrem-mcp`, registry name `com.tvijo/dshrem`).
+(`npm i -g tvijo-dshrem-mcp`, registry name `com.tvijo/dshrem`) — see
+[Tvijo DSHREM MCP server](#tvijo-dshrem-mcp-server) below.
+
+## Tvijo DSHREM MCP server
+
+The server in [`mcp/`](mcp/) is published to npm as `tvijo-dshrem-mcp`
+(MIT, Node.js 20+, stdio transport) and to the open MCP Registry as
+`com.tvijo/dshrem`. This repository is its single source; the npm package is
+built from this directory, not from a second copy.
+
+It lets an MCP client — VS Code, Claude Code, Codex, Cursor or any other stdio
+client — run a bounded Tvijo task, review a pre-merge diff, and read account and
+task state without leaving the chat. Every paid call carries an explicit
+spending limit.
+
+### Capabilities
+
+| Tool | Kind | What it does |
+| --- | --- | --- |
+| `tvijo_ask` | paid, capped | Ask Tvijo DSHREM; spends at most an explicit `max_usd`. |
+| `tvijo_review` | paid, capped | Review a supplied unified diff for evidenced findings; no repository access. |
+| `tvijo_account` | read-only | Account, balance and limits. |
+| `tvijo_task_status` | read-only | Status and spending of an existing task. |
+| `tvijo_cancel_task` | destructive | Cancel a task; money already spent may still be charged. |
+| `tvijo_wiki_search`, `tvijo_wiki_context` | free read | Search and read the public Tvijo wiki, with page revisions. |
+| `tvijo_catalog_search`, `tvijo_catalog_get` | free read | Public connector research catalog, with projection hashes. |
+| `tvijo_login_start`, `tvijo_login_poll` | auth | OAuth device sign-in; no token is returned to the model. |
+| `tvijo_local_repositories`, `tvijo_local_test_results`, `tvijo_local_execution_budget` | opt-in, read-only | Bounded local evidence snapshots; the budget snapshot is evidence, never permission to spend. |
+
+Full tool schemas, per-client setup and failure behaviour:
+[`mcp/README.md`](mcp/README.md).
+
+### Setup
+
+Requires Node.js 20 or newer and a Tvijo account.
+
+```sh
+npx -y tvijo-dshrem-mcp login   # OAuth device flow; token stored 0700/0600
+npx -y tvijo-dshrem-mcp         # starts the stdio server
+```
+
+VS Code — add to `.vscode/mcp.json` and start the server from
+**MCP: List Servers**:
+
+```json
+{
+  "servers": {
+    "tvijo": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "tvijo-dshrem-mcp"],
+      "env": { "TVIJO_MAX_USD_CAP": "1" }
+    }
+  }
+}
+```
+
+Claude Code: `claude mcp add tvijo -- npx -y tvijo-dshrem-mcp`. Codex, Cursor,
+terminal clients and the native Windows variants are documented in
+[`mcp/README.md`](mcp/README.md).
+
+### Configuration
+
+| Variable | Meaning |
+| --- | --- |
+| `TVIJO_TOKEN` | Optional access token; overrides the saved device-login token. |
+| `TVIJO_MAX_USD_CAP` | Per-call spending cap in USD; default `1`, hard ceiling `5`. |
+| `TVIJO_API_BASE` | Optional API base; default `https://dsh.tvijo.com/api/dshrem/v1`. |
+
+### Spending safety
+
+- Every paid call needs an explicit `max_usd`; a request above the effective cap
+  is rejected before any network call.
+- `TVIJO_MAX_USD_CAP` defaults to 1 USD per call, with an absolute ceiling of 5 USD.
+- Paid requests are never retried automatically. After a timeout the server only
+  performs read-only lookups by idempotency key or task id, and `spent_usd: null`
+  means unknown, never zero.
+- The device-flow token is stored with `0600` permissions, is never returned by a
+  tool and is redacted from output. Provider API credentials stay on the Tvijo
+  service.
+
+### Ownership and support
+
+`com.tvijo` is the DNS-verified MCP Registry namespace of the **tvijo.com**
+domain. The domain, the hosted Tvijo service and this repository are owned and
+operated by **Tvijo** (Nik Bibamon, [@nikbibamon](https://github.com/nikbibamon)),
+who is the accountable maintainer and support contact.
+
+- Issues and feature requests: <https://github.com/nikbibamon/tvijocode/issues>
+- Product support: <https://t.me/bibamon> (the support channel listed on
+  tvijo.com) and the feedback form <https://dsh.tvijo.com/feedback>
+- Product and documentation: <https://dsh.tvijo.com> ·
+  <https://dsh.tvijo.com/docs>
+- Security reports: contact the maintainer privately rather than opening a public
+  issue.
 
 ## Download
 
