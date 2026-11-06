@@ -3,11 +3,11 @@
 Tvijo Code is a code editor built from the open-source VS Code sources (Code - OSS),
 with the [Tvijo DSHREM](https://dsh.tvijo.com) extension built in.
 
-> **A paid Tvijo account is required.** The Tvijo DSHREM MCP server hosted in
-> [`mcp/`](mcp/) spends real money when you call its paid tools (`tvijo_ask`,
-> `tvijo_review`), up to the explicit per-call `max_usd`. Those calls draw on your
-> Tvijo balance or credits, so the account must be funded. Read-only tools need a
-> signed-in account and spend nothing.
+> **A funded Tvijo account is required for paid MCP tasks.** The MIT-licensed
+> `tvijo-dshrem-mcp` client is free to install, but `tvijo_ask` and `tvijo_review`
+> spend real money from your Tvijo balance or credits, up to the explicit
+> per-call `max_usd`. Read-only tools require a signed-in Tvijo account and spend
+> nothing.
 
 It is built by this repository's GitHub Actions from the official `microsoft/vscode` tag,
 using the [VSCodium](https://github.com/VSCodium/vscodium) build scripts:
@@ -102,18 +102,17 @@ terminal clients and the native Windows variants are documented in
 
 ### Ownership and support
 
-`com.tvijo` is the DNS-verified MCP Registry namespace of the **tvijo.com**
-domain. The domain, the hosted Tvijo service and this repository are owned and
-operated by **Tvijo** (Nik Bibamon, [@nikbibamon](https://github.com/nikbibamon)),
-who is the accountable maintainer and support contact.
+The MCP Registry record publishes this server as `com.tvijo/dshrem` under the
+DNS-verified `tvijo.com` namespace. The project identity is **Tvijo, maintained by Nik Bibamon**
+([`@nikbibamon`](https://github.com/nikbibamon)).
 
 - Issues and feature requests: <https://github.com/nikbibamon/tvijocode/issues>
-- Product support: <https://t.me/bibamon> (the support channel listed on
-  tvijo.com) and the feedback form <https://dsh.tvijo.com/feedback>
+- Official support: [admin@tvijo.com](mailto:admin@tvijo.com)
+- Product feedback: <https://dsh.tvijo.com/feedback>
 - Product and documentation: <https://dsh.tvijo.com> ·
   <https://dsh.tvijo.com/docs>
-- Security reports: contact the maintainer privately rather than opening a public
-  issue.
+- Security reports: email [admin@tvijo.com](mailto:admin@tvijo.com) privately
+  rather than opening a public issue.
 
 ## Download
 
