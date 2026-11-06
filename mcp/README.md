@@ -8,16 +8,17 @@ Listed in the [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/serve
 
 Requires Node.js 20 or newer and a [Tvijo account](https://dsh.tvijo.com). This is an ESM JavaScript package with no build step.
 
-**A paid Tvijo account is required for the paid tools.** `tvijo_ask` and
-`tvijo_review` spend real money from your Tvijo account up to the `max_usd` you
-supply, so the account must be funded. Read-only tools, and the public wiki and
-catalog reads, need a signed-in account but spend nothing.
+**A paid Tvijo account with sufficient balance or credits is required for paid MCP tasks.**
+This MIT-licensed client is free to install, but `tvijo_ask` and `tvijo_review`
+spend real money from your Tvijo balance or credits, up to the `max_usd` you
+supply. Read-only tools and public wiki/catalog reads require a signed-in Tvijo
+account and are free.
 
-## Prepared 0.2.1
+## Version 0.2.1
 
-This candidate adds authenticated public wiki search/context and connector catalog search/get. Reads use the existing account sign-in, preserve source revisions and projection hashes, return untrusted data, and support cancellation without retries. The public corpus stays fixed on the service.
+This release adds authenticated public wiki search/context and connector catalog search/get. Reads use the existing account sign-in, preserve source revisions and projection hashes, return untrusted data, and support cancellation without retries. The public corpus stays fixed on the service.
 
-The existing pre-merge diff review, spending caps, client tags and opt-in local evidence tools from 0.2.0 are retained. Publication is pending; changing package metadata does not publish the package or registry entry. See [candidate release notes](CHANGELOG.md).
+The existing pre-merge diff review, spending caps, client tags and opt-in local evidence tools from 0.2.0 are retained. The current npm package and MCP Registry entry are version 0.2.1.
 
 ## Sign in
 
@@ -207,17 +208,17 @@ Stdout carries MCP messages only. Terminal login instructions and CLI errors go 
 
 ## Ownership and support
 
-`com.tvijo` is the DNS-verified MCP Registry namespace of the **tvijo.com**
-domain. The domain, the hosted Tvijo service and this repository are owned and
-operated by **Tvijo** (Nik Bibamon, [@nikbibamon](https://github.com/nikbibamon)),
-who is the accountable maintainer and support contact.
+Publisher and namespace operator: **Tvijo, an independently operated project
+maintained by Nik Bibamon** ([`@nikbibamon`](https://github.com/nikbibamon)).
+The MCP Registry record publishes this server as `com.tvijo/dshrem` under the
+DNS-verified `tvijo.com` namespace.
 
 - Issues and feature requests: <https://github.com/nikbibamon/tvijocode/issues>
-- Product support: <https://t.me/bibamon> (the support channel listed on
-  tvijo.com) and the feedback form <https://dsh.tvijo.com/feedback>
+- Official support: [admin@tvijo.com](mailto:admin@tvijo.com)
+- Product feedback: <https://dsh.tvijo.com/feedback>
 - Documentation: <https://dsh.tvijo.com/docs>
-- Security reports: contact the maintainer privately rather than opening a public
-  issue.
+- Security reports: email [admin@tvijo.com](mailto:admin@tvijo.com) privately
+  rather than opening a public issue.
 
 ## Development
 
