@@ -8,6 +8,11 @@ Listed in the [MCP Registry](https://registry.modelcontextprotocol.io/v0.1/serve
 
 Requires Node.js 20 or newer and a [Tvijo account](https://dsh.tvijo.com). This is an ESM JavaScript package with no build step.
 
+**A paid Tvijo account is required for the paid tools.** `tvijo_ask` and
+`tvijo_review` spend real money from your Tvijo account up to the `max_usd` you
+supply, so the account must be funded. Read-only tools, and the public wiki and
+catalog reads, need a signed-in account but spend nothing.
+
 ## Prepared 0.2.1
 
 This candidate adds authenticated public wiki search/context and connector catalog search/get. Reads use the existing account sign-in, preserve source revisions and projection hashes, return untrusted data, and support cancellation without retries. The public corpus stays fixed on the service.
@@ -199,6 +204,20 @@ Stdout carries MCP messages only. Terminal login instructions and CLI errors go 
 - **Cap too low:** use a smaller task budget or set `TVIJO_MAX_USD_CAP` high enough for the requested `max_usd`, within the 5 USD ceiling. Credit and account limits may also prevent execution.
 - **Service unavailable:** an unavailable model, rate limit, unsettled charge, or service outage can prevent a task. Check the account and existing task before submitting another paid call.
 - **Offline:** login and all API tools need network access. An interrupted paid call can have an unknown outcome; reconnect and inspect the task or idempotency key before asking again.
+
+## Ownership and support
+
+`com.tvijo` is the DNS-verified MCP Registry namespace of the **tvijo.com**
+domain. The domain, the hosted Tvijo service and this repository are owned and
+operated by **Tvijo** (Nik Bibamon, [@nikbibamon](https://github.com/nikbibamon)),
+who is the accountable maintainer and support contact.
+
+- Issues and feature requests: <https://github.com/nikbibamon/tvijocode/issues>
+- Product support: <https://t.me/bibamon> (the support channel listed on
+  tvijo.com) and the feedback form <https://dsh.tvijo.com/feedback>
+- Documentation: <https://dsh.tvijo.com/docs>
+- Security reports: contact the maintainer privately rather than opening a public
+  issue.
 
 ## Development
 
