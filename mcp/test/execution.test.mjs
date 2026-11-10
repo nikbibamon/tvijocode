@@ -22,7 +22,7 @@ function fixture(overrides = {}) {
       if (overrides.scopeDenied) return Response.json({ error: { code: 'project_key_scope_refused' } }, { status: 403 });
       return Response.json({ id: 'task-a' });
     }
-    if (path === '/services/quote') return Response.json({ quote_id: 'quote-a', project_id: 'project-a', thread_id: 'thread-a', service_id: 'standard', tariff_version: 'v1', ceiling_micro_tvijo: 1000, expires_at: 200, ...overrides.quote });
+    if (path === '/services/quote') return Response.json({ quote_id: 'quote-a', project_id: 'project-a', thread_id: 'thread-a', service_id: 'standard', tariff_version: 'pilot-' + 'a'.repeat(20), ceiling_micro_tvijo: 1000, expires_at: 200, ...overrides.quote });
     if (path === '/tasks/by-idempotency/request-a') {
       if (overrides.scopeDenied || overrides.lookupFails) return Response.json({}, { status: 404 });
       return Response.json({ id: 'task-a' });
@@ -107,6 +107,8 @@ test('arbitrary endpoint substitution and tool-like identifiers fail before HTTP
   assert.throws(() => createExecutionClient({ base: 'https://other.example/api' }), e => e.code === 'execution_endpoint_refused');
   const f = fixture(); await assert.rejects(f.client.inspect('token', '../account', 'project-a'));
   assert.equal(f.calls.length, 0);
+  await assert.rejects(f.client.inspect('token', 'task-a\n', 'project-a'));
+  assert.equal(f.calls.length, 0);
 });
 
 for (const key of ['idempotency_key', 'expires_at_ms', 'resource']) test('saved quote accidental binding change is refused: ' + key, async () => {
@@ -144,4 +146,33 @@ test('missing or lower service-unit cap stops the MCP tool before any request', 
     const r = await client.callTool({ name: 'tvijo_quote_task', arguments: args });
     assert.equal(r.isError, true); assert.equal(f.calls.length, 0);
   }
+});
+
+for (const status of ['reported', 'estimated']) test('actual gateway BYOK field preserves Decimal cost and provenance: ' + status, () => {
+  const r = evidenceProjection({ id:'task-a', project_id:'project-a', status:'completed',
+    byok:{ provider_cost_usd:'0.123456789', provider_cost_status:status, provider_cost_source:status==='reported' ? 'provider:cost' : 'provider:estimated_cost' } }, 'project-a');
+  assert.equal(r.cost.provider_usd,'0.123456789'); assert.equal(r.cost.provider_cost_status,status);
+  assert.equal(r.cost.invoice_usd,null);
+});
+test('Decimal provider precision is preserved without rounding to service units', () => {
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok:{provider_cost_usd:'0.0000000001234',provider_cost_status:'reported'}},'project-a');
+  assert.equal(r.cost.provider_usd,'0.0000000001234');
+});
+
+for (const status of ['unknown','unrecognized-state','running','frozen',undefined]) test('unknown or unsettled outcome cannot turn supplied zero into a known total: ' + status, () => {
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status,byok:{provider_cost_usd:'0',provider_cost_status:'reported'}},'project-a');
+  assert.equal(r.cost.provider_usd,null); assert.equal(r.cost.provider_cost_status,'unknown');
+});
+
+test('unsupported cost provenance remains unknown; supported final zero is distinct', () => {
+  for (const status of ['unknown','not_dispatched','invented',undefined]) {
+    const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok:{provider_cost_usd:'0',provider_cost_status:status}},'project-a');
+    assert.equal(r.cost.provider_usd,null);
+  }
+  const zero=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok:{provider_cost_usd:'0',provider_cost_status:'reported',provider_cost_source:'provider_rejected'}},'project-a');
+  assert.equal(zero.cost.provider_usd,'0'); assert.equal(zero.cost.provider_cost_source,'provider_rejected');
+});
+
+for (const tariff_version of ['sk-synthetic-private-key-value','pilot-'+ 'a'.repeat(21),'pilot-not-a-hash','v1','pilot-'+ 'a'.repeat(20)+'\n']) test('service-supplied tariff text must match actual server format: ' + JSON.stringify(tariff_version), async () => {
+  const f=fixture({quote:{tariff_version}});await assert.rejects(f.client.quote('token',args));assert.equal(f.posts(),0);
 });
