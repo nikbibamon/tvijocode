@@ -136,3 +136,61 @@ export function createExecutionClient(api, { now = () => Date.now(), allowLocalT
     },
   };
 }
+
+// Independently versioned, no-model public fixture binding. The server, not
+// these tools or a saved quote, admits the fixed Worker task with live scope.
+export function createFixtureClient(api, { now = () => Date.now(), allowLocalTest = false } = {}) {
+  const parsed = new URL(api.base);
+  const local = allowLocalTest && parsed.protocol === 'http:' && parsed.hostname === '127.0.0.1'
+    && /^\/api\/dshrem\/v1$/.test(parsed.pathname) && !parsed.username && !parsed.password && !parsed.search && !parsed.hash;
+  if (api.base !== RESOURCE && !local) throw new ServiceError('execution_endpoint_refused', 'Fixed fixture tools require the configured Tvijo service resource.');
+  const prefix = project => '/projects/' + ident(project) + '/fixture-v3';
+  const path = (project, task) => prefix(project) + '/executions/' + ident(task);
+  function receipt(value, project, task) {
+    if (value?.schema !== 'tvijo.execution.evidence/1' || value.project_id !== project || value.id !== task
+        || value.admission_version !== 'public-fixture/v1' || value.fixture_id !== 'sha256-public-worker-v1'
+        || value.model_request_sent !== false || value.customer_model_workflow !== 'NOT_RUN') {
+      throw new ServiceError('fixture_scope_mismatch', 'The service did not confirm the fixed no-model fixture scope.');
+    }
+    return value;
+  }
+  const inspect = async (token, task, project) => receipt(await api.request(path(project, task), { token }), project, task);
+  return {
+    async quote(token, { project_id, idempotency_key }) {
+      const q = await api.request(prefix(project_id) + '/quotes', { token, method: 'POST', body: {
+        fixture_id: 'sha256-public-worker-v1', idempotency_key: ident(idempotency_key),
+      } });
+      if (q?.schema !== 'tvijo.customer-fixture.quote/1' || q.project_id !== project_id || !validId(q.quote_id)
+          || q.fixture_id !== 'sha256-public-worker-v1' || q.admission_version !== 'public-fixture/v1'
+          || !/^[a-f0-9]{64}$/.test(q.contract_hash) || q.execution_authorized !== false
+          || q.model_request_sent !== false || !Number.isSafeInteger(q.expires_at) || q.expires_at * 1000 <= now()) {
+        throw new ServiceError('fixture_quote_unavailable', 'The server did not confirm a timely fixed public fixture quote.');
+      }
+      return { ...q, resource: api.base };
+    },
+    async submit(token, quote) {
+      if (quote?.resource !== api.base || quote.admission_version !== 'public-fixture/v1'
+          || quote.fixture_id !== 'sha256-public-worker-v1' || quote.execution_authorized !== false
+          || !/^[a-f0-9]{64}$/.test(quote.contract_hash) || !Number.isSafeInteger(quote.expires_at)
+          || quote.expires_at * 1000 <= now()) throw new ServiceError('fixture_quote_unavailable', 'The fixed fixture quote is invalid or expired.');
+      const project = ident(quote.project_id); const task = ident(quote.quote_id);
+      try {
+        return receipt(await api.request(path(project, task) + '/submit', { token, method: 'POST', body: {
+          contract_hash: quote.contract_hash, admission_version: quote.admission_version,
+        } }), project, task);
+      } catch (error) {
+        // Network ambiguity is inspection only; never POST another launch.
+        if (error instanceof ServiceError && error.status) throw error;
+        try { return { ...await inspect(token, task, project), submission_recovered_by_read: true }; }
+        catch { throw new ServiceError('fixture_submission_unknown', 'Inspect the same fixture identity. No execution retry was sent.'); }
+      }
+    },
+    inspect,
+    async reconnect(token, task, project) {
+      return receipt(await api.request(path(project, task) + '/reconnect', { token, method: 'POST', body: {} }), project, task);
+    },
+    async cancel(token, task, project) {
+      return receipt(await api.request(path(project, task) + '/cancel', { token, method: 'POST', body: {} }), project, task);
+    },
+  };
+}
