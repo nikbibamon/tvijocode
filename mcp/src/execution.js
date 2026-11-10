@@ -9,7 +9,8 @@ const UNKNOWN = new Set(['usage_unknown', 'charge_pending', 'usage_reconciliatio
 const STATES = new Set(['issued', 'running', 'completed', 'failed', 'cancelled', 'frozen', 'unknown', 'expired']);
 const SETTLED_STATES = new Set(['completed', 'failed', 'cancelled', 'expired']);
 const COST_STATUS = new Set(['reported', 'estimated']);
-const COST_SOURCES = new Set(['provider:cost', 'provider:total_cost', 'provider:estimated_cost', 'provider_rejected']);
+const COST_PROVENANCE = new Map([['provider:cost', 'reported'], ['provider:total_cost', 'reported'],
+  ['provider:estimated_cost', 'estimated'], ['provider_rejected', 'reported']]);
 // service_ledger.tariff emits pilot- + the first20 hex digits of its body hash.
 const TARIFF = /^pilot-[a-f0-9]{20}$/;
 const validId = value => typeof value === 'string' && ID.test(value) && !/[\r\n]/.test(value);
@@ -27,8 +28,14 @@ export function evidenceProjection(snapshot, projectId) {
   if (!snapshot || snapshot.project_id !== projectId) throw new ServiceError('project_mismatch', 'The service did not confirm this task project.');
   const id = ident(snapshot.id);
   const costStatus = snapshot.byok?.provider_cost_status;
-  const uncertain = UNKNOWN.has(snapshot.reason) || !SETTLED_STATES.has(snapshot.status) || !COST_STATUS.has(costStatus);
-  const providerCost = uncertain ? null : money(snapshot.byok?.provider_cost_usd);
+  const costSource = snapshot.byok?.provider_cost_source;
+  const provenance = COST_STATUS.has(costStatus) && COST_PROVENANCE.get(costSource) === costStatus;
+  const uncertain = UNKNOWN.has(snapshot.reason) || !SETTLED_STATES.has(snapshot.status) || !provenance;
+  let providerCost = uncertain ? null : money(snapshot.byok?.provider_cost_usd);
+  // An estimated zero is not an attested no-charge result. Keep all original
+  // records, but require reported provenance before displaying a known zero.
+  if (providerCost !== null && /^0(?:\.0+)?$/.test(providerCost) && costStatus !== 'reported') providerCost = null;
+  if (providerCost !== null && costSource === 'provider_rejected' && !/^0(?:\.0+)?$/.test(providerCost)) providerCost = null;
   const receipt = snapshot.receipt || {};
   return {
     schema: 'tvijo.execution.evidence/1', task_id: id, project_id: projectId,
@@ -38,7 +45,7 @@ export function evidenceProjection(snapshot, projectId) {
       service_unit: 'micro_tvijo', debited: micro(receipt.debited_micro_tvijo), held: micro(receipt.held_micro_tvijo),
       provider_usd: providerCost,
       provider_cost_status: providerCost === null ? 'unknown' : costStatus,
-      provider_cost_source: COST_SOURCES.has(snapshot.byok?.provider_cost_source) ? snapshot.byok.provider_cost_source : null,
+      provider_cost_source: provenance ? costSource : null,
       invoice_usd: null,
     },
     verification: { status: 'not_independently_verified', reviewer: null },

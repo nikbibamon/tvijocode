@@ -155,7 +155,7 @@ for (const status of ['reported', 'estimated']) test('actual gateway BYOK field 
   assert.equal(r.cost.invoice_usd,null);
 });
 test('Decimal provider precision is preserved without rounding to service units', () => {
-  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok:{provider_cost_usd:'0.0000000001234',provider_cost_status:'reported'}},'project-a');
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok:{provider_cost_usd:'0.0000000001234',provider_cost_status:'reported',provider_cost_source:'provider:cost'}},'project-a');
   assert.equal(r.cost.provider_usd,'0.0000000001234');
 });
 
@@ -175,4 +175,26 @@ test('unsupported cost provenance remains unknown; supported final zero is disti
 
 for (const tariff_version of ['sk-synthetic-private-key-value','pilot-'+ 'a'.repeat(21),'pilot-not-a-hash','v1','pilot-'+ 'a'.repeat(20)+'\n']) test('service-supplied tariff text must match actual server format: ' + JSON.stringify(tariff_version), async () => {
   const f=fixture({quote:{tariff_version}});await assert.rejects(f.client.quote('token',args));assert.equal(f.posts(),0);
+});
+
+for (const byok of [
+  {provider_cost_usd:'1.25',provider_cost_status:'reported'},
+  {provider_cost_usd:'0',provider_cost_status:'reported',provider_cost_source:'invented'},
+  {provider_cost_usd:'1.25',provider_cost_status:'reported',provider_cost_source:'provider:estimated_cost'},
+  {provider_cost_usd:'1.25',provider_cost_status:'estimated',provider_cost_source:'provider:cost'},
+]) test('missing or inconsistent cost source is not authoritative: '+JSON.stringify(byok),()=>{
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok},'project-a');
+  assert.equal(r.cost.provider_usd,null);assert.equal(r.cost.provider_cost_status,'unknown');assert.equal(r.cost.provider_cost_source,null);
+});
+for(const zero of ['0','0.0','0.000']) test('estimated zero requires reported no-charge provenance: '+zero,()=>{
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'completed',byok:{provider_cost_usd:zero,provider_cost_status:'estimated',provider_cost_source:'provider:estimated_cost'}},'project-a');
+  assert.equal(r.cost.provider_usd,null);
+});
+test('recognized expired state can retain an attributed final charge',()=>{
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'expired',byok:{provider_cost_usd:'1',provider_cost_status:'reported',provider_cost_source:'provider:cost'}},'project-a');
+  assert.equal(r.status,'expired');assert.equal(r.cost.provider_usd,'1');
+});
+test('a rejection marker cannot attest a positive charge',()=>{
+  const r=evidenceProjection({id:'task-a',project_id:'project-a',status:'failed',byok:{provider_cost_usd:'1',provider_cost_status:'reported',provider_cost_source:'provider_rejected'}},'project-a');
+  assert.equal(r.cost.provider_usd,null);
 });

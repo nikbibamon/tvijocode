@@ -19,3 +19,7 @@ Validation, independent review and an actual customer workflow are separate gate
 ## Independent-review corrections R2
 
 The first scoped Terra review rejected the initial candidate. The actual gateway public BYOK field is `provider_cost_usd`, with `reported` or `estimated` provenance; it is now preserved as exact Decimal text, including precision beyond service units. Unknown/unrecognized or unsettled task outcomes and unsupported cost provenance retain a null total. A reported, settled zero remains distinct. Invoice cost remains null. The MCP quote also restricts tariff versions to the actual server `pilot-` plus20hex format; arbitrary credential-shaped text and trailing controls are refused. Original failed review and exact revisions are retained in programme evidence. Root affected checks pass (MCP34, VSIX21); repeat independent acceptance remains pending.
+
+## Independent-review corrections R3
+
+Terra R2 found missing or inconsistent provider-cost provenance, estimated zero being treated as known, and an omitted expired display state. The projection now requires an exact supported source/status pair, keeps estimated zero unknown without float conversion, refuses a positive rejection charge, and recognizes expired consistently. Targeted root fixtures: MCP43 and VSIX30 PASS. Independent acceptance is separate and pending; earlier reviews remain preserved.
