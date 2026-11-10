@@ -2,6 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createClient, ServiceError } from './client.js';
+import { createExecutionClient } from './execution.js';
 import { createTokenStore } from './token-store.js';
 import { createLocalReports } from './local-reports.js';
 import { VERSION } from './client-tag.js';
@@ -67,6 +68,43 @@ export function createMcpServer({ env = process.env, client = createClient({ bas
   server.registerTool('tvijo_account', {
     description: 'Read your Tvijo account, balance and limits.', inputSchema: {}, annotations: READ_ONLY
   }, guarded(async () => json(await client.account(await token()))));
+
+  // Explicit canary flag; this is the customer service-token transport, NOT
+  // authority to upgrade the separate public RemDesk mcp:read OAuth grant.
+  if (env.TVIJO_EXECUTION_ROUTES === '1') {
+    const execution = createExecutionClient(client, { now });
+    const serviceCap = Number(env.TVIJO_MAX_MICRO_TVIJO ?? '0');
+    const checkServiceCap = ceiling => {
+      if (!Number.isSafeInteger(serviceCap) || serviceCap <= 0 || serviceCap > 50000000
+          || !Number.isSafeInteger(ceiling) || ceiling <= 0 || ceiling > serviceCap) {
+        throw new ServiceError('service_cap_unavailable', 'An explicit service-unit cap must cover this reservation. No task was reserved.');
+      }
+    };
+    const identity = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
+    const scopedTask = { task_id: identity, project_id: identity };
+    server.registerTool('tvijo_capabilities', {
+      description: 'Read existing service capabilities. A listed route is not execution authorization.',
+      inputSchema: {}, annotations: READ_ONLY
+    }, guarded(async () => json(await execution.capabilities(await token()))));
+    server.registerTool('tvijo_quote_task', {
+      description: 'Create an expiring project-bound service quote. This does not execute a model or reserve a task. Service units are not provider USD.',
+      inputSchema: { project_id: identity, thread_id: identity, idempotency_key: identity,
+        prompt: z.string().min(1).max(20000), max_micro_tvijo: z.number().int().positive().max(50000000) },
+      annotations: MUTATING
+    }, guarded(async args => { checkServiceCap(args.max_micro_tvijo); return json(await execution.quote(await token(), args)); }));
+    server.registerTool('tvijo_submit_task', {
+      description: 'Reserve one explicitly authorized saved quote using existing project permissions. May hold service credit; does not send a model request. Ambiguous outcomes are inspected without a paid retry.',
+      inputSchema: { quote: z.record(z.string(), z.unknown()) }, annotations: MUTATING
+    }, guarded(async ({ quote }) => { checkServiceCap(quote.ceiling_micro_tvijo); return json(await execution.submit(await token(), quote)); }));
+    server.registerTool('tvijo_execution_evidence', {
+      description: 'Fetch a project-bound attributable receipt. Unknown provider cost and runtime ACK remain unknown; local completion is not independent acceptance.',
+      inputSchema: scopedTask, annotations: READ_ONLY
+    }, guarded(async ({ task_id, project_id }) => json(await execution.inspect(await token(), task_id, project_id))));
+    server.registerTool('tvijo_reconnect_task', {
+      description: 'Reconnect by reading the same task. This never repeats execution or resumes an unknown external request.',
+      inputSchema: scopedTask, annotations: READ_ONLY
+    }, guarded(async ({ task_id, project_id }) => json(await execution.reconnect(await token(), task_id, project_id))));
+  }
 
   const knowledge = {
     wiki_search: {
