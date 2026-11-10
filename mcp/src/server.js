@@ -2,7 +2,7 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import { createClient, ServiceError } from './client.js';
-import { createExecutionClient } from './execution.js';
+import { createExecutionClient, createFixtureClient } from './execution.js';
 import { createTokenStore } from './token-store.js';
 import { createLocalReports } from './local-reports.js';
 import { VERSION } from './client-tag.js';
@@ -104,6 +104,29 @@ export function createMcpServer({ env = process.env, client = createClient({ bas
       description: 'Reconnect by reading the same task. This never repeats execution or resumes an unknown external request.',
       inputSchema: scopedTask, annotations: READ_ONLY
     }, guarded(async ({ task_id, project_id }) => json(await execution.reconnect(await token(), task_id, project_id))));
+  }
+
+  if (env.TVIJO_CUSTOMER_FIXTURE_V3 === 'public-fixture/v1') {
+    // Loopback is restricted to the explicit local fixture-test flag. Production
+    // clients remain pinned to the existing authenticated service resource.
+    const fixture = createFixtureClient(client, { now, allowLocalTest: env.TVIJO_FIXTURE_LOCAL_TEST === '1' });
+    const identity = z.string().regex(/^[A-Za-z0-9_-]{1,100}$/);
+    const scoped = { task_id: identity, project_id: identity };
+    server.registerTool('tvijo_fixture_v3_quote', {
+      description: 'Quote the fixed public SHA256 fixture only. No model, provider, source upload, execution permission or money reservation.',
+      inputSchema: z.object({ project_id: identity, idempotency_key: identity }).strict(), annotations: MUTATING
+    }, guarded(async args => json(await fixture.quote(await token(), args))));
+    server.registerTool('tvijo_fixture_v3_submit', {
+      description: 'Ask the authenticated server to admit one saved fixed public fixture contract. Default-off server policy and live project scope decide authority. Never executes customer models.',
+      inputSchema: z.object({ quote: z.record(z.string(), z.unknown()) }).strict(), annotations: MUTATING
+    }, guarded(async ({ quote }) => json(await fixture.submit(await token(), quote))));
+    for (const [suffix, method, description] of [
+      ['inspect', 'inspect', 'Read the same fixed fixture record and Ops evidence; independent acceptance remains separate.'],
+      ['reconnect', 'reconnect', 'Reconcile the existing Worker outbox only. Unknown execution is never rerun.'],
+      ['cancel', 'cancel', 'Request cancellation on the same fixed fixture. A request alone does not prove a process stopped.'],
+    ]) server.registerTool('tvijo_fixture_v3_' + suffix, {
+      description, inputSchema: z.object(scoped).strict(), annotations: suffix === 'inspect' ? READ_ONLY : MUTATING
+    }, guarded(async ({ task_id, project_id }) => json(await fixture[method](await token(), task_id, project_id))));
   }
 
   const knowledge = {
