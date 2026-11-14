@@ -1,4 +1,4 @@
-name: Candidate 1.140.07215 - Windows
+name: Candidate 1.140.07216 - Windows
 
 # Tvijo Code test phase: Windows x64 only, one job, manual dispatch.
 #
@@ -18,7 +18,7 @@ concurrency:
 
 env:
   APP_NAME: TvijoCode
-  RELEASE_VERSION: "1.140.07215"
+  RELEASE_VERSION: "1.140.07216"
   ASSETS_REPOSITORY: ${{ github.repository }}
   BINARY_NAME: tvijocode
   DISABLE_MSI: "yes"

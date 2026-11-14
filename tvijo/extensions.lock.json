@@ -2,8 +2,8 @@
   {
     "id": "tvijo.tvijo-dshrem",
     "dir": "tvijo-dshrem",
-    "version": "0.10.25",
-    "url": "https://github.com/nikbibamon/dshrempub/releases/download/tvijo-v0.10.25/tvijo-dshrem-0.10.25.vsix",
-    "sha256": "453d1fa8d6753de5009fdaec2d6d956b80aac678a4cff670b3d124d9d2a355ba"
+    "version": "0.10.28",
+    "url": "https://github.com/nikbibamon/dshrempub/releases/download/tvijo-v0.10.28/tvijo-dshrem-0.10.28.vsix",
+    "sha256": "b0c983a7ac12d2f47fadc24c570cf406a22f0b548ee015d323f01beb3dee7e70"
   }
 ]

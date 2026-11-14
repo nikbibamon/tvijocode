@@ -1,4 +1,4 @@
-name: Candidate 1.140.07215 - macOS
+name: Candidate 1.140.07216 - macOS
 
 # Tvijo Code: VSCodium's stable macOS pipeline without Apple notarization
 # (no developer certificate yet) and without the versions repo. The app is
@@ -9,7 +9,7 @@ on:
 
 env:
   APP_NAME: TvijoCode
-  RELEASE_VERSION: "1.140.07215"
+  RELEASE_VERSION: "1.140.07216"
   ASSETS_REPOSITORY: ${{ github.repository }}
   BINARY_NAME: tvijocode
   DISABLE_UPDATE: "yes"
