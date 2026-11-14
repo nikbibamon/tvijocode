@@ -20,7 +20,7 @@ class NativePublicationGuards(unittest.TestCase):
         self.root=Path(tempfile.mkdtemp(prefix='publisher-fixture-',dir=parent))
         self.artifact=self.root/m.NAMES['windows-exe'];self.artifact.write_bytes(b'synthetic installer')
         self.digest=hashlib.sha256(self.artifact.read_bytes()).hexdigest()
-        self.receipt={'status':'passed','editor_version':m.VERSION,'artifact':self.artifact.name,'artifact_sha256':self.digest,'extension_version':'0.10.25','extension_sha256':m.EXT_SHA,'installer_exit':0,'uninstaller_exit':0,'activation':{'active':True,'guide':True,'write':True,'commandExit':0}}
+        self.receipt={'status':'passed','editor_version':m.VERSION,'artifact':self.artifact.name,'artifact_sha256':self.digest,'extension_version':m.EXT_VERSION,'extension_sha256':m.EXT_SHA,'installer_exit':0,'uninstaller_exit':0,'activation':{'active':True,'guide':True,'write':True,'commandExit':0}}
         self.run={'databaseId':m.RUNS['windows-exe'],'headSha':m.BUILDER,'status':'completed','jobs':[{'name':'build','status':'completed','conclusion':'success'}]}
 
     def test_exact_installer_and_successful_job_are_accepted(self):
