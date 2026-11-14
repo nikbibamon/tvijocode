@@ -21,13 +21,14 @@ import time
 import zipfile
 
 REPO='nikbibamon/tvijocode'
-VERSION='1.140.07215'
-BUILDER='6495423a8ca97724e9f447883947d9361430b207'
-ZIP_VERIFIER='6e8bfbfca245948c2a5569a305527c1973ef9951'
-INSTALLER_VERIFIER='2e605f523e1fce5b30880567602e3c388d3513c5'
-EXT_SHA='453d1fa8d6753de5009fdaec2d6d956b80aac678a4cff670b3d124d9d2a355ba'
-RUNS={'windows-exe':40859929335,'windows-zip':40859929335,'macos-arm64':40859932911,'macos-x64':40859932911,'linux-tar':40859936491}
-JOBS={'windows-exe':'build','macos-arm64':'build (macos-14, arm64)','macos-x64':'build (macos-15-intel, x64)','linux-tar':'smoke'}
+VERSION='1.140.07216'
+BUILDER='e42f0b3735a6c46679e72341925167a9c152ef21'
+ZIP_VERIFIER='e081f2dcde17afcb4869747be3b1d7b5493889bd'
+INSTALLER_VERIFIER='e081f2dcde17afcb4869747be3b1d7b5493889bd'
+EXT_VERSION='0.10.28'
+EXT_SHA='b0c983a7ac12d2f47fadc24c570cf406a22f0b548ee015d323f01beb3dee7e70'
+RUNS={'windows-exe':43645456669,'windows-zip':43645456669,'macos-arm64':43645454279,'macos-x64':43645454279,'linux-tar':43645459269}
+JOBS={'windows-exe':'build','macos-arm64':'build (macos-15, arm64)','macos-x64':'build (macos-15-intel, x64)','linux-tar':'smoke'}
 NAMES={'windows-exe':f'TvijoCodeUserSetup-x64-{VERSION}.exe','windows-zip':f'TvijoCode-win32-x64-{VERSION}.zip','macos-arm64':f'TvijoCode-darwin-arm64-{VERSION}.zip','macos-x64':f'TvijoCode-darwin-x64-{VERSION}.zip','linux-tar':f'TvijoCode-linux-x64-{VERSION}.tar.gz'}
 
 def sha(path):
@@ -69,7 +70,7 @@ def validate_receipt(kind,artifact,receipt,builder,verifier=None,provenance=None
     if kind not in NAMES or artifact.name!=NAMES[kind]:raise ValueError('unexpected native artifact name')
     if builder.get('databaseId')!=RUNS[kind] or builder.get('headSha')!=BUILDER or builder.get('status')!='completed':raise ValueError('builder identity mismatch')
     if receipt.get('status')!='passed' or receipt.get('editor_version',receipt.get('release_version'))!=VERSION:raise ValueError('native receipt/version not accepted')
-    if receipt.get('extension_version')!='0.10.25' or receipt.get('extension_sha256')!=EXT_SHA:raise ValueError('embedded extension pin mismatch')
+    if receipt.get('extension_version')!=EXT_VERSION or receipt.get('extension_sha256')!=EXT_SHA:raise ValueError('embedded extension pin mismatch')
     digest=sha(artifact)
     if receipt.get('artifact')!=artifact.name or receipt.get('artifact_sha256')!=digest:raise ValueError('receipt does not bind artifact bytes')
     active=receipt.get('activation')
@@ -139,9 +140,9 @@ def main():
     if api(api_root+'/releases/tags/'+VERSION,optional=True) is not None or api(api_root+'/git/ref/tags/'+VERSION,optional=True) is not None:raise ValueError('version already exists; preserve it')
     expected={p.name:{'sha256':sha(p),'bytes':p.stat().st_size} for p in upload}
     notes='Tvijo Code '+VERSION+' preview. Published channels: '+', '.join(kinds)+'. Each included artifact passed its own native smoke.\n\n'
-    notes+='Extension 0.10.25 is embedded. Interactive sign-in and live paid-model tasks are unverified. macOS notarization and Windows publisher signing trust are not verified; Linux package installers are not covered by the desktop tar test. Existing releases are preserved.\n'
+    notes+='Extension '+EXT_VERSION+' is embedded. Interactive sign-in and live paid-model tasks are unverified. macOS notarization and Windows publisher signing trust are not verified; Linux package installers are not covered by the desktop tar test. Existing releases are preserved.\n'
     notes+='\nРусский: предварительная версия Tvijo Code '+VERSION+'. Опубликованные варианты: '+', '.join(kinds)+'. Каждый включённый файл прошёл собственную проверку на соответствующей платформе.\n\n'
-    notes+='Встроено расширение 0.10.25. Интерактивный вход и реальные задачи с платными моделями не проверялись. Нотаризация macOS и доверие к подписи издателя Windows не подтверждены; проверка Linux tar не распространяется на пакетные установщики. Предыдущие релизы сохранены.\n'
+    notes+='Встроено расширение '+EXT_VERSION+'. Интерактивный вход и реальные задачи с платными моделями не проверялись. Нотаризация macOS и доверие к подписи издателя Windows не подтверждены; проверка Linux tar не распространяется на пакетные установщики. Предыдущие релизы сохранены.\n'
     tag=gh('api','--method','POST',api_root+'/git/refs','-f','ref=refs/tags/'+VERSION,'-f','sha='+BUILDER)
     if tag.returncode:raise ValueError('fresh tag reservation failed; inspect remote state')
     write_new(args.out/'tag-created.json',tag.stdout.encode())

@@ -1,4 +1,4 @@
-name: Candidate 1.140.07215 - Windows
+name: Candidate 1.140.07216 - Windows
 
 # Tvijo Code test phase: Windows x64 only, one job, manual dispatch.
 #
@@ -18,7 +18,7 @@ concurrency:
 
 env:
   APP_NAME: TvijoCode
-  RELEASE_VERSION: "1.140.07215"
+  RELEASE_VERSION: "1.140.07216"
   ASSETS_REPOSITORY: ${{ github.repository }}
   BINARY_NAME: tvijocode
   DISABLE_MSI: "yes"
@@ -36,6 +36,8 @@ env:
   SHOULD_DEPLOY: "no"
   VSCODE_ARCH: x64
   VSCODE_QUALITY: stable
+  # Windows Python defaults to cp1252; the installer smoke writes UTF-8 test sources.
+  PYTHONUTF8: "1"
   # Existing releases and failed draft artifacts are retained for reconciliation.
 
 jobs:

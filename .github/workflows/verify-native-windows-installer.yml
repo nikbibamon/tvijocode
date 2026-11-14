@@ -1,4 +1,4 @@
-name: Verify retained 1.140.07215 Windows installer
+name: Verify retained 1.140.07216 Windows installer
 
 on:
   workflow_dispatch: {}
@@ -11,9 +11,9 @@ jobs:
   verify:
     runs-on: windows-2022
     env:
-      RELEASE_VERSION: '1.140.07215'
-      TVIJO_SOURCE_SHA: '6495423a8ca97724e9f447883947d9361430b207'
-      TVIJO_BUILD_RUN: '40859929335'
+      RELEASE_VERSION: '1.140.07216'
+      TVIJO_SOURCE_SHA: 'e42f0b3735a6c46679e72341925167a9c152ef21'
+      TVIJO_BUILD_RUN: '43645456669'
       PYTHONUTF8: '1'
     defaults:
       run:
@@ -52,14 +52,14 @@ jobs:
       - uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c
         with:
           name: tvijocode-x64
-          run-id: 40859929335
+          run-id: 43645456669
           github-token: ${{ secrets.GITHUB_TOKEN }}
           path: assets
       - name: Test exact retained installer
         run: |
           python3 - <<'PYVERIFY'
           import hashlib,pathlib,subprocess,sys
-          p=pathlib.Path('assets/TvijoCodeUserSetup-x64-1.140.07215.exe')
+          p=pathlib.Path('assets/TvijoCodeUserSetup-x64-1.140.07216.exe')
           before=hashlib.sha256(p.read_bytes()).hexdigest()
           subprocess.run([sys.executable,'tvijo/smoke_windows_installer.py'],check=True)
           assert hashlib.sha256(p.read_bytes()).hexdigest()==before,'Installer changed during verification'

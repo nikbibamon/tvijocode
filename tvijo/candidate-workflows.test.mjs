@@ -7,7 +7,7 @@ test('native candidates are manual, pin one version and source, and cannot publi
  for(const file of files){
   const text=readFileSync(file,'utf8');
   assert.match(text,/workflow_dispatch:\s*\{\}/,file);
-  assert.match(text,/RELEASE_VERSION:\s*"1\.140\.07215"/,file);
+  assert.match(text,/RELEASE_VERSION:\s*"1\.140\.07216"/,file);
   assert.match(text,/github\.sha/,file);
   assert.doesNotMatch(text,/contents:\s*write/,file);
   assert.doesNotMatch(text,/run:\s*\.\/release\.sh\s*$/m,file);
@@ -22,7 +22,7 @@ test('each proposed platform tests its own final artifact',()=>{
  assert.match(linux,/xvfb-run/);
  const lock=JSON.parse(readFileSync('tvijo/extensions.lock.json','utf8'));
  const extension=lock.find(x=>x.id==='tvijo.tvijo-dshrem');
- assert.equal(extension.version,'0.10.25');
- assert.equal(extension.sha256,'453d1fa8d6753de5009fdaec2d6d956b80aac678a4cff670b3d124d9d2a355ba');
- assert.match(extension.url,/tvijo-v0\.10\.25\/tvijo-dshrem-0\.10\.25\.vsix$/);
+ assert.equal(extension.version,'0.10.28');
+ assert.equal(extension.sha256,'b0c983a7ac12d2f47fadc24c570cf406a22f0b548ee015d323f01beb3dee7e70');
+ assert.match(extension.url,/tvijo-v0\.10\.28\/tvijo-dshrem-0\.10\.28\.vsix$/);
 });
