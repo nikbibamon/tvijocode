@@ -117,8 +117,8 @@ DNS-verified `tvijo.com` namespace.
 
 ## Download
 
-[Preview 1.140.07215](https://github.com/nikbibamon/tvijocode/releases/tag/1.140.07215)
-embeds Tvijo DSHREM 0.10.25. It includes a portable Windows x64 ZIP and per-user
+[Preview 1.140.07216](https://dsh.tvijo.com/download)
+embeds Tvijo DSHREM 0.10.28. It includes a portable Windows x64 ZIP and per-user
 EXE installer, macOS ZIPs for Apple silicon and Intel, and a Linux x64 desktop
 TAR. Each published file has a SHA-256 and an individual native smoke receipt;
 the Windows EXE was also installed and uninstalled in Windows CI.
@@ -128,9 +128,9 @@ publisher signing trust, interactive sign-in and paid-model tasks were not
 verified. Linux DEB/RPM installers and the standalone CLI are not included in
 this preview. Previous releases remain available.
 
-**Русский:** [предварительный выпуск 1.140.07215](https://github.com/nikbibamon/tvijocode/releases/tag/1.140.07215)
+**Русский:** [предварительный выпуск 1.140.07216](https://dsh.tvijo.com/download)
 содержит Windows ZIP и EXE, macOS для Apple silicon и Intel и Linux x64 TAR со
-встроенным Tvijo DSHREM 0.10.25. Для каждого файла опубликованы SHA-256 и отчёт
+встроенным Tvijo DSHREM 0.10.28. Для каждого файла опубликованы SHA-256 и отчёт
 нативной проверки. Нотаризация macOS и доверие к подписи издателя Windows не
 подтверждены; вход и задачи с платными моделями не проверялись. Пакетные
 установщики Linux и отдельный CLI в этот выпуск не входят.
